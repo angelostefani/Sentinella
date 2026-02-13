@@ -1,0 +1,11 @@
+:root { font-family: "Segoe UI", sans-serif; }
+body { margin: 0; background: #f3f6fa; }
+.app { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+nav { background: #1f2937; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+nav a { color: #fff; text-decoration: none; }
+main { padding: 20px; }
+form { display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
+input, textarea, select, button { padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; }
+button { background: #0f766e; color: #fff; border: none; cursor: pointer; }
+pre { background: white; padding: 12px; border-radius: 8px; white-space: pre-wrap; }
+@media (max-width: 900px) { .app { grid-template-columns: 1fr; } nav { flex-direction: row; overflow: auto; } }
