@@ -17,7 +17,7 @@ class Settings(BaseModel):
     worker_max_workers: int = int(os.getenv("WORKER_MAX_WORKERS", "4"))
     watchlist_sync_interval_s: int = int(os.getenv("WATCHLIST_SYNC_INTERVAL_S", "30"))
     watch_jitter_max_s: int = int(os.getenv("WATCH_JITTER_MAX_S", "30"))
-    ollama_timeout_s: int = int(os.getenv("OLLAMA_TIMEOUT_S", "300"))
+    ollama_timeout_s: int = int(os.getenv("OLLAMA_TIMEOUT_S", "600"))
 
 
 settings = Settings()

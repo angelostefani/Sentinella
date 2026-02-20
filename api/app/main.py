@@ -4,14 +4,14 @@ import uuid
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import Base, engine, get_db
 from .deps import get_current_user, require_admin
 from .logging_utils import configure_logging
-from .models import Run, SeenItem, User, Watchlist
+from .models import Run, User, Watchlist
 from .pipeline import digest_markdown, fetch_extract, hash_url, search_web
 from .rate_limit import InMemoryRateLimiter
 from .schemas import AskIn, LoginIn, MeOut, RunOut, TokenOut, UserCreateIn, UserOut, UserUpdateIn, WatchIn, WatchOut
@@ -138,7 +138,14 @@ def run_query(db: Session, query: str, recency_days: int, max_results: int, doma
     db.flush()
     if watch_id:
         for item in items:
-            db.add(SeenItem(watch_id=watch_id, url_hash=hash_url(item["url"]), url=item["url"]))
+            db.execute(
+                text(
+                    "INSERT INTO seen_items (watch_id, url_hash, url, first_seen) "
+                    "VALUES (:watch_id, :url_hash, :url, NOW()) "
+                    "ON CONFLICT (watch_id, url_hash) DO NOTHING"
+                ),
+                {"watch_id": watch_id, "url_hash": hash_url(item["url"]), "url": item["url"]},
+            )
     db.commit()
     db.refresh(run)
     return run

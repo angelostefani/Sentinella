@@ -9,10 +9,22 @@ const api = async (path, options = {}) => {
   if (res.status === 401) {
     localStorage.removeItem('token')
     window.location.href = '/login'
-    return
+    throw new Error('Sessione scaduta. Effettua di nuovo il login.')
   }
   const text = await res.text()
-  return text ? JSON.parse(text) : {}
+  let data = {}
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = { detail: text }
+    }
+  }
+  if (!res.ok) {
+    const message = data?.detail || `Richiesta fallita (${res.status})`
+    throw new Error(message)
+  }
+  return data
 }
 
 function Layout({ children }) {
@@ -47,12 +59,23 @@ function Login() {
 function Ask() {
   const [query, setQuery] = useState('')
   const [result, setResult] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const submit = async (e) => {
     e.preventDefault()
-    const out = await api('/api/ask', { method: 'POST', body: JSON.stringify({ query, recency_days: 7, max_results: 5, domains_allow: [], domains_block: [] }) })
-    setResult(out)
+    setError('')
+    setLoading(true)
+    setResult(null)
+    try {
+      const out = await api('/api/ask', { method: 'POST', body: JSON.stringify({ query, recency_days: 7, max_results: 5, domains_allow: [], domains_block: [] }) })
+      setResult(out)
+    } catch (err) {
+      setError(err?.message || 'Errore durante la ricerca')
+    } finally {
+      setLoading(false)
+    }
   }
-  return <Layout><form onSubmit={submit}><h2>Ask</h2><textarea value={query} onChange={(e)=>setQuery(e.target.value)} /><button>Run</button></form><pre>{result?.digest_md}</pre></Layout>
+  return <Layout><form onSubmit={submit}><h2>Ask</h2><textarea value={query} onChange={(e)=>setQuery(e.target.value)} /><button disabled={loading}>{loading ? 'Running...' : 'Run'}</button></form>{error ? <p>{error}</p> : null}<pre>{result?.digest_md}</pre></Layout>
 }
 
 function Watchlist() {
