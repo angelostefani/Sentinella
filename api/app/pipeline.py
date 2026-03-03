@@ -23,7 +23,7 @@ def search_web(query: str, recency_days: int, max_results: int, domains_allow: l
         url = item.get("url")
         if not url or not allowed_url(url, domains_allow, domains_block):
             continue
-        items.append({"title": item.get("title", "(senza titolo)"), "url": url, "content": ""})
+        items.append({"title": item.get("title", "(senza titolo)"), "url": url, "content": "", "snippet": (item.get("content") or "")[: settings.max_text_chars_per_source]})
         if len(items) >= max_results:
             break
     return items

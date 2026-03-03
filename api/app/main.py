@@ -129,9 +129,10 @@ def run_query(db: Session, query: str, recency_days: int, max_results: int, doma
     items = search_web(query, recency_days, max_results, domains_allow, domains_block)
     for item in items:
         try:
-            item["content"] = fetch_extract(item["url"])
+            fetched = fetch_extract(item["url"])
+            item["content"] = fetched or item.pop("snippet", "")
         except Exception:
-            item["content"] = ""
+            item["content"] = item.pop("snippet", "")
     digest = digest_markdown(query, items)
     run = Run(watch_id=watch_id, user_id=user_id, query=query, items=items, digest_md=digest)
     db.add(run)

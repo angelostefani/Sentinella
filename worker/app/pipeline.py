@@ -62,16 +62,17 @@ def search_web(query: str, recency_days: int, max_results: int, domains_allow: l
         url = item.get("url")
         if not url or not allowed_url(url, domains_allow, domains_block):
             continue
-        content = ""
+        snippet = (item.get("content") or "")[: settings.max_text_chars_per_source]
+        content = snippet
         try:
             with httpx.Client(timeout=settings.fetch_timeout_s, follow_redirects=True) as client:
                 fr = client.get(url)
                 fr.raise_for_status()
                 raw = fr.content[: settings.max_fetch_bytes]
-            content = trafilatura.extract(raw.decode("utf-8", errors="ignore"), include_comments=False, include_tables=False) or ""
-            content = content[: settings.max_text_chars_per_source]
+            extracted = trafilatura.extract(raw.decode("utf-8", errors="ignore"), include_comments=False, include_tables=False) or ""
+            content = (extracted or snippet)[: settings.max_text_chars_per_source]
         except Exception:
-            content = ""
+            pass  # content stays as snippet
         out.append({"title": item.get("title", "(senza titolo)"), "url": url, "content": content})
         if len(out) >= max_results:
             break
