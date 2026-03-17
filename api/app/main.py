@@ -1,20 +1,27 @@
 import os
 import time
 import uuid
+from datetime import datetime, timedelta
+
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import Base, engine, get_db
 from .deps import get_current_user, require_admin
 from .logging_utils import configure_logging
-from .models import Run, User, Watchlist
+from .models import Run, SeenItem, User, Watchlist
 from .pipeline import digest_markdown, fetch_extract, hash_url, search_web
 from .rate_limit import InMemoryRateLimiter
-from .schemas import AskIn, LoginIn, MeOut, RunOut, TokenOut, UserCreateIn, UserOut, UserUpdateIn, WatchIn, WatchOut
+from .schemas import (
+    AskIn, LoginIn, MeOut, PasswordChangeIn, RunOut, RunSummaryOut,
+    ServiceStatusOut, StatsOut, TokenOut,
+    UserCreateIn, UserOut, UserUpdateIn, WatchIn, WatchOut, WatchToggleIn,
+)
 from .security import create_token, hash_password, verify_password
 
 if not settings.jwt_secret:
@@ -64,6 +71,11 @@ async def log_requests(request: Request, call_next):
 def startup():
     os.environ["TZ"] = settings.tz
     Base.metadata.create_all(bind=engine)
+    # Add new columns to existing tables without migrations
+    with Session(engine) as db:
+        db.execute(text("ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'"))
+        db.execute(text("ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS output_language VARCHAR(50) DEFAULT 'italiano'"))
+        db.commit()
     with Session(engine) as db:
         first_user = db.scalar(select(User).limit(1))
         if not first_user:
@@ -76,10 +88,28 @@ def startup():
 def health():
     return {"status": "ok"}
 
+
 @app.get("/api/health")
 def api_health():
     return {"status": "ok"}
 
+
+@app.get("/api/health/services", response_model=ServiceStatusOut)
+def health_services(_: User = Depends(get_current_user)):
+    def check(url: str) -> str:
+        try:
+            r = httpx.get(url, timeout=5)
+            return "ok" if r.status_code == 200 else "error"
+        except Exception:
+            return "error"
+
+    return ServiceStatusOut(
+        searxng=check(f"{settings.searxng_url}/search?q=test&format=json"),
+        ollama=check(f"{settings.ollama_url}/api/tags"),
+    )
+
+
+# ─── Auth ────────────────────────────────────────────────────────────────────
 
 @app.post("/api/auth/login", response_model=TokenOut)
 def login(payload: LoginIn, db: Session = Depends(get_db)):
@@ -93,6 +123,17 @@ def login(payload: LoginIn, db: Session = Depends(get_db)):
 def me(user: User = Depends(get_current_user)):
     return MeOut(id=user.id, username=user.username, role=user.role)
 
+
+@app.put("/api/me/password")
+def change_my_password(payload: PasswordChangeIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="password corrente non valida")
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return {"ok": True}
+
+
+# ─── Admin users ─────────────────────────────────────────────────────────────
 
 @app.post("/api/admin/users", response_model=UserOut)
 def create_user(payload: UserCreateIn, _: User = Depends(require_admin), db: Session = Depends(get_db)):
@@ -125,7 +166,49 @@ def update_user(user_id: int, payload: UserUpdateIn, _: User = Depends(require_a
     return user
 
 
-def run_query(db: Session, query: str, recency_days: int, max_results: int, domains_allow: list[str], domains_block: list[str], watch_id: int | None, user_id: int | None):
+# ─── Admin stats ─────────────────────────────────────────────────────────────
+
+@app.get("/api/admin/stats", response_model=StatsOut)
+def get_stats(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    total_users = db.scalar(select(func.count()).select_from(User)) or 0
+    total_watches = db.scalar(select(func.count()).select_from(Watchlist)) or 0
+    total_runs = db.scalar(select(func.count()).select_from(Run)) or 0
+
+    since = datetime.utcnow() - timedelta(days=14)
+    rows = db.execute(
+        select(func.date(Run.created_at).label("day"), func.count().label("count"))
+        .where(Run.created_at >= since)
+        .group_by(func.date(Run.created_at))
+        .order_by(func.date(Run.created_at))
+    ).all()
+    runs_per_day = [{"day": str(r.day), "count": r.count} for r in rows]
+
+    top_rows = db.execute(
+        select(Watchlist.id, Watchlist.name, func.count(Run.id).label("run_count"))
+        .join(Run, Run.watch_id == Watchlist.id, isouter=True)
+        .group_by(Watchlist.id, Watchlist.name)
+        .order_by(func.count(Run.id).desc())
+        .limit(5)
+    ).all()
+    top_watches = [{"id": r.id, "name": r.name, "run_count": r.run_count} for r in top_rows]
+
+    return StatsOut(
+        total_users=total_users,
+        total_watches=total_watches,
+        total_runs=total_runs,
+        runs_per_day=runs_per_day,
+        top_watches=top_watches,
+    )
+
+
+# ─── Ask ─────────────────────────────────────────────────────────────────────
+
+def run_query(
+    db: Session, query: str, recency_days: int, max_results: int,
+    domains_allow: list[str], domains_block: list[str],
+    watch_id: int | None, user_id: int | None,
+    output_language: str = "italiano",
+):
     items = search_web(query, recency_days, max_results, domains_allow, domains_block)
     for item in items:
         try:
@@ -133,7 +216,7 @@ def run_query(db: Session, query: str, recency_days: int, max_results: int, doma
             item["content"] = fetched or item.pop("snippet", "")
         except Exception:
             item["content"] = item.pop("snippet", "")
-    digest = digest_markdown(query, items)
+    digest = digest_markdown(query, items, language=output_language)
     run = Run(watch_id=watch_id, user_id=user_id, query=query, items=items, digest_md=digest)
     db.add(run)
     db.flush()
@@ -156,14 +239,22 @@ def run_query(db: Session, query: str, recency_days: int, max_results: int, doma
 def ask(payload: AskIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if not limiter.allow(f"ask:{user.id}"):
         raise HTTPException(status_code=429, detail="rate limit exceeded")
-    return run_query(db, payload.query, payload.recency_days, payload.max_results, payload.domains_allow, payload.domains_block, None, user.id)
+    return run_query(
+        db, payload.query, payload.recency_days, payload.max_results,
+        payload.domains_allow, payload.domains_block,
+        None, user.id, payload.output_language,
+    )
 
+
+# ─── Watchlist ────────────────────────────────────────────────────────────────
 
 @app.get("/api/watchlist", response_model=list[WatchOut])
 def list_watchlist(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if user.role == "admin":
         return list(db.scalars(select(Watchlist).order_by(Watchlist.id.desc())).all())
-    return list(db.scalars(select(Watchlist).where((Watchlist.scope == "global") | (Watchlist.owner_user_id == user.id)).order_by(Watchlist.id.desc())).all())
+    return list(db.scalars(select(Watchlist).where(
+        (Watchlist.scope == "global") | (Watchlist.owner_user_id == user.id)
+    ).order_by(Watchlist.id.desc())).all())
 
 
 def upsert_watch(scope: str, watch_id: int | None, payload: WatchIn, user: User, db: Session):
@@ -186,6 +277,8 @@ def upsert_watch(scope: str, watch_id: int | None, payload: WatchIn, user: User,
     watch.max_results = payload.max_results
     watch.domains_allow = payload.domains_allow
     watch.domains_block = payload.domains_block
+    watch.tags = payload.tags
+    watch.output_language = payload.output_language
     db.commit()
     db.refresh(watch)
     return watch
@@ -208,6 +301,8 @@ def delete_personal_watch(watch_id: int, user: User = Depends(get_current_user),
         raise HTTPException(status_code=404, detail="not found")
     if watch.owner_user_id != user.id and user.role != "admin":
         raise HTTPException(status_code=403, detail="forbidden")
+    db.query(SeenItem).filter(SeenItem.watch_id == watch_id).delete()
+    db.query(Run).filter(Run.watch_id == watch_id).delete()
     db.delete(watch)
     db.commit()
     return {"ok": True}
@@ -228,9 +323,26 @@ def delete_global_watch(watch_id: int, _: User = Depends(require_admin), db: Ses
     watch = db.get(Watchlist, watch_id)
     if not watch or watch.scope != "global":
         raise HTTPException(status_code=404, detail="not found")
+    db.query(SeenItem).filter(SeenItem.watch_id == watch_id).delete()
+    db.query(Run).filter(Run.watch_id == watch_id).delete()
     db.delete(watch)
     db.commit()
     return {"ok": True}
+
+
+@app.patch("/api/watchlist/{watch_id}", response_model=WatchOut)
+def toggle_watch(watch_id: int, payload: WatchToggleIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    watch = db.get(Watchlist, watch_id)
+    if not watch:
+        raise HTTPException(status_code=404, detail="not found")
+    if watch.scope == "global" and user.role != "admin":
+        raise HTTPException(status_code=403, detail="forbidden")
+    if watch.scope == "personal" and watch.owner_user_id != user.id and user.role != "admin":
+        raise HTTPException(status_code=403, detail="forbidden")
+    watch.enabled = payload.enabled
+    db.commit()
+    db.refresh(watch)
+    return watch
 
 
 @app.post("/api/watchlist/{watch_id}/run", response_model=RunOut)
@@ -246,10 +358,16 @@ def run_watch_now(watch_id: int, user: User = Depends(get_current_user), db: Ses
         if watch.owner_user_id != user.id:
             raise HTTPException(status_code=403, detail="forbidden")
     run_user_id = None if watch.scope == "global" else watch.owner_user_id
-    return run_query(db, watch.query, watch.recency_days, watch.max_results, watch.domains_allow, watch.domains_block, watch.id, run_user_id)
+    return run_query(
+        db, watch.query, watch.recency_days, watch.max_results,
+        watch.domains_allow, watch.domains_block,
+        watch.id, run_user_id, watch.output_language,
+    )
 
 
-@app.get("/api/runs", response_model=list[RunOut])
+# ─── Runs ─────────────────────────────────────────────────────────────────────
+
+@app.get("/api/runs", response_model=list[RunSummaryOut])
 def list_runs(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if user.role == "admin":
         return list(db.scalars(select(Run).order_by(Run.id.desc()).limit(100)).all())
@@ -264,3 +382,15 @@ def get_run(run_id: int, user: User = Depends(get_current_user), db: Session = D
     if user.role != "admin" and run.user_id != user.id:
         raise HTTPException(status_code=403, detail="forbidden")
     return run
+
+
+@app.delete("/api/runs/{run_id}")
+def delete_run(run_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    run = db.get(Run, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="not found")
+    if user.role != "admin" and run.user_id != user.id:
+        raise HTTPException(status_code=403, detail="forbidden")
+    db.delete(run)
+    db.commit()
+    return {"ok": True}

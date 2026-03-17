@@ -5,6 +5,7 @@ server:
   secret_key: "sentinella-searxng-dev-key"
   base_url: false
   image_proxy: false
+  limiter: false
 search:
   safe_search: 1
   formats:

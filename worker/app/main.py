@@ -29,7 +29,7 @@ def run_watch(watch_id: int):
                 return
             items = search_web(watch.query, watch.recency_days, watch.max_results, watch.domains_allow, watch.domains_block)
             try:
-                digest = digest_markdown(watch.query, items)
+                digest = digest_markdown(watch.query, items, language=getattr(watch, "output_language", "italiano"))
             except Exception as exc:
                 digest = ""
                 logger.error(f"digest failed watch={watch.id}", extra={"error": str(exc)})

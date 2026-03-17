@@ -14,7 +14,7 @@ def search_web(query: str, recency_days: int, max_results: int, domains_allow: l
         "safesearch": 1,
         "time_range": recency_to_time_range(recency_days),
     }
-    with httpx.Client(timeout=settings.fetch_timeout_s) as client:
+    with httpx.Client(timeout=settings.fetch_timeout_s, headers={"X-Forwarded-For": "127.0.0.1"}) as client:
         r = client.get(f"{settings.searxng_url}/search", params=params)
         r.raise_for_status()
         results = r.json().get("results", [])
@@ -38,12 +38,12 @@ def fetch_extract(url: str) -> str:
     return text[: settings.max_text_chars_per_source]
 
 
-def digest_markdown(query: str, items: list[dict]) -> str:
+def digest_markdown(query: str, items: list[dict], language: str = "italiano") -> str:
     src_lines = []
     for idx, item in enumerate(items, 1):
         src_lines.append(f"[{idx}] {item['title']} - {item['url']}\\n{item.get('content','')}")
     prompt = (
-        "Scrivi in italiano usando SOLO le fonti fornite. Output markdown con titolo, "
+        f"Scrivi in {language} usando SOLO le fonti fornite. Output markdown con titolo, "
         "5-10 bullet Novita/Takeaways con citazioni [n], opzionale Cosa tenere d'occhio, sezione Fonti.\\n\\n"
         f"Query: {query}\\n\\nFonti:\\n" + "\\n\\n".join(src_lines)
     )

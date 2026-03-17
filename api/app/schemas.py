@@ -29,6 +29,11 @@ class UserUpdateIn(BaseModel):
     password: str | None = None
 
 
+class PasswordChangeIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class UserOut(BaseModel):
     id: int
     username: str
@@ -43,6 +48,11 @@ class AskIn(BaseModel):
     max_results: int = 5
     domains_allow: list[str] = []
     domains_block: list[str] = []
+    output_language: str = "italiano"
+
+
+class WatchToggleIn(BaseModel):
+    enabled: bool
 
 
 class WatchIn(BaseModel):
@@ -54,6 +64,8 @@ class WatchIn(BaseModel):
     max_results: int = 5
     domains_allow: list[str] = []
     domains_block: list[str] = []
+    tags: list[str] = []
+    output_language: str = "italiano"
 
 
 class WatchOut(BaseModel):
@@ -68,6 +80,16 @@ class WatchOut(BaseModel):
     max_results: int
     domains_allow: list[str]
     domains_block: list[str]
+    tags: list[str]
+    output_language: str
+    created_at: datetime
+
+
+class RunSummaryOut(BaseModel):
+    id: int
+    watch_id: int | None
+    user_id: int | None
+    query: str
     created_at: datetime
 
 
@@ -79,3 +101,27 @@ class RunOut(BaseModel):
     items: list
     digest_md: str
     created_at: datetime
+
+
+class RunsPerDay(BaseModel):
+    day: str
+    count: int
+
+
+class TopWatch(BaseModel):
+    id: int
+    name: str
+    run_count: int
+
+
+class StatsOut(BaseModel):
+    total_users: int
+    total_watches: int
+    total_runs: int
+    runs_per_day: list[RunsPerDay]
+    top_watches: list[TopWatch]
+
+
+class ServiceStatusOut(BaseModel):
+    searxng: str
+    ollama: str

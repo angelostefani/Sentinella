@@ -29,6 +29,8 @@ class Watchlist(Base):
     max_results: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     domains_allow: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     domains_block: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    tags: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    output_language: Mapped[str] = mapped_column(String(50), nullable=False, default="italiano")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
