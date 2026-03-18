@@ -1,111 +1,111 @@
-# Architettura
+# Architecture
 
-## Panoramica
+## Overview
 
-Sentinella è composta da più servizi orchestrati con Docker Compose. Tutti i servizi comunicano sulla rete interna Docker; solo nginx espone una porta sull'host.
+Sentinella is composed of multiple services orchestrated with Docker Compose. All services communicate over the internal Docker network; only nginx exposes a port on the host.
 
 ```
-Host (porta 8001)
+Host (port 8001)
       │
    nginx
-   ├── /          → frontend React (static files da volume frontend_dist)
+   ├── /          → React frontend (static files from frontend_dist volume)
    └── /api/*     → api:8000 (FastAPI)
                        │
                   ┌────┴────────────────────────────┐
                   │                                 │
                postgres                          searxng
-               (database)                      (ricerca web)
+               (database)                      (web search)
                   │                                 │
                worker                           searxng_redis
            (APScheduler)                         (cache)
                   │
                ollama
-             (LLM locale)
+             (local LLM)
 ```
 
-## Servizi principali
+## Main Services
 
 ### API (FastAPI)
 
 - File: `api/app/main.py`
-- Gestisce tutte le richieste REST su `/api/*`
-- Autenticazione JWT, RBAC (admin/user)
-- Rate limiting in-memory
-- All'avvio: crea tabelle DB e bootstrap utente admin
-- Logging strutturato JSON su stdout
+- Handles all REST requests under `/api/*`
+- JWT authentication, RBAC (`admin` / `user`)
+- In-memory rate limiting
+- On startup: creates DB tables and bootstraps the admin user
+- Structured JSON logging to stdout
 
 ### Worker (APScheduler)
 
 - File: `worker/app/main.py`
-- Processo Python indipendente con `BackgroundScheduler`
-- Ogni 30s sincronizza i job dal DB (aggiunge/aggiorna/rimuove)
-- Ogni watch abilitata ottiene un job con `CronTrigger`
-- I job eseguono `run_watch()`: cerca → estrae → digest → salva
-- Deduplicazione URL tramite tabella `seen_items`
-- Concorrenza: `ThreadPoolExecutor(max_workers=WORKER_MAX_WORKERS)`
+- Independent Python process using `BackgroundScheduler`
+- Every 30s it syncs jobs from the DB (add/update/remove)
+- Each enabled watch gets a `CronTrigger` job
+- Jobs execute `run_watch()`: search → extract → digest → save
+- URL deduplication through the `seen_items` table
+- Concurrency: `ThreadPoolExecutor(max_workers=WORKER_MAX_WORKERS)`
 
 ### Frontend (React + Vite)
 
 - File: `frontend/src/App.jsx`
-- SPA React 18 con React Router 6
-- Build one-shot in `frontend_build`, output nel volume `frontend_dist`
-- Token JWT salvato in `localStorage`
-- Redirect automatico a `/login` su risposta 401
+- React 18 SPA with React Router 6
+- One-shot build in `frontend_build`, output stored in the `frontend_dist` volume
+- JWT token stored in `localStorage`
+- Automatic redirect to `/login` on HTTP 401 responses
 
 ### Pipeline (API + Worker)
 
-Entrambi i servizi condividono la stessa logica di pipeline:
+Both services share the same pipeline logic:
 
 ```
-search_web()        → SearXNG JSON → lista URL filtrati per dominio
-fetch_extract()     → httpx fetch + trafilatura estrazione testo
-digest_markdown()   → Ollama /api/generate → Markdown con fonti
+search_web()        → SearXNG JSON → domain-filtered URL list
+fetch_extract()     → httpx fetch + trafilatura text extraction
+digest_markdown()   → Ollama /api/generate → Markdown with sources
 ```
 
-## Flussi principali
+## Main Flows
 
-### Ricerca on-demand (Ask)
+### On-Demand Search (Ask)
 
 ```
 POST /api/ask
   → auth + rate limit
   → search_web() via SearXNG
-  → fetch_extract() per ogni URL
+  → fetch_extract() for each URL
   → digest_markdown() via Ollama
-  → salva Run(watch_id=NULL, user_id=me)
-  → ritorna RunOut
+  → save Run(watch_id=NULL, user_id=me)
+  → return RunOut
 ```
 
-### Watch schedulata (Worker)
+### Scheduled Watch (Worker)
 
 ```
-sync_jobs() ogni 30s
-  → legge watchlist abilitate da DB
-  → crea/aggiorna/rimuove job APScheduler
+sync_jobs() every 30s
+  → reads enabled watchlists from DB
+  → creates/updates/removes APScheduler jobs
 
 CronTrigger fires
   → run_watch(watch_id)
-      → jitter 0..WATCH_JITTER_MAX_S secondi
+      → jitter 0..WATCH_JITTER_MAX_S seconds
       → search_web() + fetch + digest
-      → salva Run(watch_id=id)
-      → upsert seen_items (dedup URL)
+      → save Run(watch_id=id)
+      → upsert seen_items (URL dedup)
 ```
 
-### Autenticazione
+### Authentication
 
 ```
 POST /api/auth/login {username, password}
   → verify_password (bcrypt)
   → create_token (JWT HS256, 12h)
-  → ritorna access_token
+  → return access_token
 
-Richieste successive: Authorization: Bearer <token>
-  → get_current_user() → decode_token() → verifica is_active
+Subsequent requests: Authorization: Bearer <token>
+  → get_current_user() → decode_token() → verify is_active
 ```
 
-## Stack tecnologico
+## Technology Stack
 
-| Layer | Tecnologia | Versione |
+| Layer | Technology | Version |
 |-------|-----------|---------|
 | Web API | FastAPI + Uvicorn | 0.115 / 0.30 |
 | ORM | SQLAlchemy | 2.0 |
@@ -116,7 +116,7 @@ Richieste successive: Authorization: Bearer <token>
 | Auth | python-jose + passlib (bcrypt) | — |
 | Frontend | React 18 + React Router 6 | — |
 | Build tool | Vite | 5.4 |
-| LLM | Ollama (llama3.2 default) | latest |
+| LLM | Ollama (`llama3.2` by default) | latest |
 | Search | SearXNG | latest |
 | Proxy | nginx alpine | latest |
-| Linguaggio | Python 3.11 / JavaScript | — |
+| Language | Python 3.11 / JavaScript | — |

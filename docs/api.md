@@ -2,7 +2,7 @@
 
 Base URL: `http://localhost:8001`
 
-Tutti gli endpoint (tranne `/health` e `/api/auth/login`) richiedono l'header:
+All endpoints except `/health` and `/api/auth/login` require this header:
 ```
 Authorization: Bearer <access_token>
 ```
@@ -11,22 +11,22 @@ Authorization: Bearer <access_token>
 
 ## Health
 
-### `GET /health` o `GET /api/health`
+### `GET /health` or `GET /api/health`
 
-Verifica che il servizio API sia attivo.
+Checks that the API service is running.
 
-**Risposta:**
+**Response:**
 ```json
 {"status": "ok"}
 ```
 
 ---
 
-## Autenticazione
+## Authentication
 
 ### `POST /api/auth/login`
 
-Login con username e password.
+Login with username and password.
 
 **Body:**
 ```json
@@ -36,7 +36,7 @@ Login con username e password.
 }
 ```
 
-**Risposta:**
+**Response:**
 ```json
 {
   "access_token": "<jwt_token>",
@@ -48,9 +48,9 @@ Login con username e password.
 
 ### `GET /api/me`
 
-Restituisce le informazioni dell'utente corrente.
+Returns information about the current user.
 
-**Risposta:**
+**Response:**
 ```json
 {
   "id": 1,
@@ -63,13 +63,13 @@ Restituisce le informazioni dell'utente corrente.
 
 ---
 
-## Ask (ricerca on-demand)
+## Ask (On-Demand Search)
 
 ### `POST /api/ask`
 
-Esegue una ricerca web immediata e genera un digest Markdown.
+Runs an immediate web search and generates a Markdown digest.
 
-> Rate limited: `RATE_LIMIT_RPM` richieste al minuto per utente.
+> Rate limited: `RATE_LIMIT_RPM` requests per minute per user.
 
 **Body:**
 ```json
@@ -82,15 +82,15 @@ Esegue una ricerca web immediata e genera un digest Markdown.
 }
 ```
 
-| Campo | Tipo | Default | Descrizione |
+| Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `query` | string | — | Query di ricerca (obbligatorio) |
-| `recency_days` | int | 7 | Filtra risultati per recency (1=day, 7=week, 30=month, >30=year) |
-| `max_results` | int | 5 | Numero massimo di risultati |
-| `domains_allow` | list[string] | [] | Solo questi domini (vuoto = tutti) |
-| `domains_block` | list[string] | [] | Escludi questi domini |
+| `query` | string | — | Search query (required) |
+| `recency_days` | int | 7 | Filters results by recency (1=day, 7=week, 30=month, >30=year) |
+| `max_results` | int | 5 | Maximum number of results |
+| `domains_allow` | list[string] | [] | Only these domains (empty = all) |
+| `domains_block` | list[string] | [] | Exclude these domains |
 
-**Risposta:**
+**Response:**
 ```json
 {
   "id": 42,
@@ -103,7 +103,7 @@ Esegue una ricerca web immediata e genera un digest Markdown.
       "text": "..."
     }
   ],
-  "digest_md": "## Novità Qdrant\n\n- ...\n\n### Fonti\n[1] ...",
+  "digest_md": "## Qdrant Updates\n\n- ...\n\n### Sources\n[1] ...",
   "created_at": "2025-03-16T10:30:00"
 }
 ```
@@ -114,17 +114,17 @@ Esegue una ricerca web immediata e genera un digest Markdown.
 
 ### `GET /api/watchlist`
 
-Lista tutte le watchlist accessibili all'utente corrente.
-- **admin**: vede global + personal di tutti
-- **user**: vede global (read-only) + proprie personal
+Lists all watchlists accessible to the current user.
+- **admin**: sees global + personal watchlists for all users
+- **user**: sees global (read-only) + their own personal watchlists
 
-**Risposta:** array di oggetti watchlist.
+**Response:** array of watchlist objects.
 
 ---
 
 ### `POST /api/watchlist/personal`
 
-Crea una nuova watchlist personale.
+Creates a new personal watchlist.
 
 **Body:**
 ```json
@@ -140,60 +140,60 @@ Crea una nuova watchlist personale.
 }
 ```
 
-| Campo | Tipo | Default | Descrizione |
+| Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `name` | string | — | Nome descrittivo |
-| `query` | string | — | Query di ricerca |
-| `cron` | string | `"0 8 * * *"` | Schedulazione cron |
-| `enabled` | bool | true | Attiva/disattiva |
-| `recency_days` | int | 7 | Filtra per recency |
-| `max_results` | int | 5 | Max risultati |
-| `domains_allow` | list[string] | [] | Whitelist domini |
-| `domains_block` | list[string] | [] | Blacklist domini |
+| `name` | string | — | Descriptive name |
+| `query` | string | — | Search query |
+| `cron` | string | `"0 8 * * *"` | Cron schedule |
+| `enabled` | bool | true | Enable/disable |
+| `recency_days` | int | 7 | Recency filter |
+| `max_results` | int | 5 | Max results |
+| `domains_allow` | list[string] | [] | Domain whitelist |
+| `domains_block` | list[string] | [] | Domain blacklist |
 
-**Risposta:** oggetto watchlist creato.
+**Response:** created watchlist object.
 
 ---
 
 ### `PUT /api/watchlist/personal/{id}`
 
-Aggiorna una watchlist personale (solo proprietario o admin).
+Updates a personal watchlist (owner or admin only).
 
-**Body:** stessi campi di POST (parziale).
+**Body:** same fields as POST (partial).
 
 ---
 
 ### `DELETE /api/watchlist/personal/{id}`
 
-Elimina una watchlist personale (solo proprietario o admin).
+Deletes a personal watchlist (owner or admin only).
 
 ---
 
 ### `POST /api/watchlist/global` *(admin only)*
 
-Crea una watchlist globale. Stessi campi di `/personal`.
+Creates a global watchlist. Same fields as `/personal`.
 
 ---
 
 ### `PUT /api/watchlist/global/{id}` *(admin only)*
 
-Aggiorna una watchlist globale.
+Updates a global watchlist.
 
 ---
 
 ### `DELETE /api/watchlist/global/{id}` *(admin only)*
 
-Elimina una watchlist globale.
+Deletes a global watchlist.
 
 ---
 
 ### `POST /api/watchlist/{id}/run`
 
-Esegue manualmente una watchlist.
+Runs a watchlist manually.
 
-> Rate limited. Admin può eseguire qualsiasi watchlist; user solo le proprie personal.
+> Rate limited. Admin can run any watchlist; users can only run their own personal watchlists.
 
-**Risposta:** oggetto run creato (stesso formato di `/api/ask`).
+**Response:** created run object (same format as `/api/ask`).
 
 ---
 
@@ -201,11 +201,11 @@ Esegue manualmente una watchlist.
 
 ### `GET /api/runs`
 
-Lista le ultime esecuzioni (max 100).
-- **admin**: vede tutti i run
-- **user**: vede solo i propri (ask + personal)
+Lists recent executions (max 100).
+- **admin**: sees all runs
+- **user**: sees only their own runs (Ask + personal watchlists)
 
-**Risposta:**
+**Response:**
 ```json
 [
   {
@@ -222,9 +222,9 @@ Lista le ultime esecuzioni (max 100).
 
 ### `GET /api/runs/{id}`
 
-Dettaglio completo di un run (include `items` e `digest_md`).
+Full run detail (includes `items` and `digest_md`).
 
-**Risposta:**
+**Response:**
 ```json
 {
   "id": 42,
@@ -239,11 +239,11 @@ Dettaglio completo di un run (include `items` e `digest_md`).
 
 ---
 
-## Admin — Gestione Utenti *(admin only)*
+## Admin — User Management *(admin only)*
 
 ### `POST /api/admin/users`
 
-Crea un nuovo utente.
+Creates a new user.
 
 **Body:**
 ```json
@@ -254,49 +254,49 @@ Crea un nuovo utente.
 }
 ```
 
-| Campo | Tipo | Valori | Descrizione |
+| Field | Type | Values | Description |
 |-------|------|--------|-------------|
-| `username` | string | — | Username univoco |
-| `password` | string | — | Password in chiaro (hashata con bcrypt) |
-| `role` | string | `admin` / `user` | Ruolo |
+| `username` | string | — | Unique username |
+| `password` | string | — | Plain password (hashed with bcrypt) |
+| `role` | string | `admin` / `user` | Role |
 
 ---
 
 ### `GET /api/admin/users`
 
-Lista tutti gli utenti.
+Lists all users.
 
 ---
 
 ### `PUT /api/admin/users/{id}`
 
-Aggiorna un utente: può disattivare (`is_active: false`) o resettare la password.
+Updates a user: can deactivate (`is_active: false`) or reset the password.
 
-**Body (parziale):**
+**Body (partial):**
 ```json
 {
   "is_active": false
 }
 ```
-oppure
+or
 ```json
 {
-  "password": "nuova_password"
+  "password": "new_password"
 }
 ```
 
 ---
 
-## Matrice permessi
+## Permission Matrix
 
 | Endpoint | admin | user |
 |----------|:-----:|:----:|
 | `POST /api/ask` | ✓ | ✓ |
-| `GET /api/watchlist` | ✓ (tutti) | ✓ (global + proprie) |
+| `GET /api/watchlist` | ✓ (all) | ✓ (global + own) |
 | `POST /api/watchlist/personal` | ✓ | ✓ |
-| `PUT/DELETE /api/watchlist/personal/{id}` | ✓ (tutti) | ✓ (proprie) |
+| `PUT/DELETE /api/watchlist/personal/{id}` | ✓ (all) | ✓ (own) |
 | `POST/PUT/DELETE /api/watchlist/global` | ✓ | ✗ |
-| `POST /api/watchlist/{id}/run` | ✓ (tutti) | ✓ (proprie) |
-| `GET /api/runs` | ✓ (tutti) | ✓ (propri) |
-| `GET /api/runs/{id}` | ✓ | ✓ (propri) |
+| `POST /api/watchlist/{id}/run` | ✓ (all) | ✓ (own) |
+| `GET /api/runs` | ✓ (all) | ✓ (own) |
+| `GET /api/runs/{id}` | ✓ | ✓ (own) |
 | `POST/GET/PUT /api/admin/users` | ✓ | ✗ |

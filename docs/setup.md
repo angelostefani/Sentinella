@@ -1,81 +1,81 @@
-# Setup e Installazione
+# Setup and Installation
 
-## Prerequisiti
+## Prerequisites
 
 - Docker Engine 24+
 - Docker Compose v2
-- Almeno 4 GB di RAM (Ollama + PostgreSQL + servizi)
-- Porta `8001` libera sull'host
+- At least 4 GB of RAM (Ollama + PostgreSQL + services)
+- Port `8001` available on the host
 
-## Avvio rapido
+## Quick Start
 
-1. Copia il file di configurazione d'esempio:
+1. Copy the example configuration file:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Imposta almeno `JWT_SECRET` nel file `.env`:
+2. Set at least `JWT_SECRET` in `.env`:
 
 ```bash
-JWT_SECRET=cambia_questo_valore_segreto
+JWT_SECRET=change_this_secret_value
 ```
 
-3. Avvia lo stack completo:
+3. Start the full stack:
 
 ```bash
 docker compose up --build
 ```
 
-> Il primo avvio scarica il modello Ollama (es. `llama3.2` ~2 GB). Il servizio `ollama_init` si occupa del pull automatico.
+> On first startup, the Ollama model is downloaded automatically (for example `llama3.2`, about 2 GB). The `ollama_init` service handles the pull.
 
-## Verifica avvio
+## Startup Verification
 
-| Check | Comando |
+| Check | Command |
 |-------|---------|
-| UI raggiungibile | Apri `http://localhost:8001` nel browser |
+| UI reachable | Open `http://localhost:8001` in the browser |
 | API health | `curl http://localhost:8001/api/health` → `{"status":"ok"}` |
-| Login admin | Vedi sotto |
+| Admin login | See below |
 
-## Primo login
+## First Login
 
 - **URL**: `http://localhost:8001`
 - **Username**: `admin`
 - **Password**: `admin123`
 
-> Cambiare la password admin tramite l'API al primo accesso:
+> Change the admin password via API on first login:
 > ```bash
 > curl -X PUT http://localhost:8001/api/admin/users/1 \
 >   -H "Authorization: Bearer $TOKEN" \
 >   -H "Content-Type: application/json" \
->   -d '{"password":"nuova_password_sicura"}'
+>   -d '{"password":"new_secure_password"}'
 > ```
 
-## Servizi Docker
+## Docker Services
 
-| Servizio | Ruolo | Porta interna |
+| Service | Role | Internal Port |
 |----------|-------|---------------|
-| `nginx` | UI React + reverse proxy `/api/` | 80 → host:8001 |
-| `frontend_build` | Build one-shot React/Vite | — |
+| `nginx` | React UI + `/api/` reverse proxy | 80 → host:8001 |
+| `frontend_build` | One-shot React/Vite build | — |
 | `api` | FastAPI — REST API | 8000 |
-| `worker` | APScheduler — watchlist schedulate | — |
-| `postgres` | Database PostgreSQL 16 | 5432 |
-| `ollama` | LLM locale (digest Markdown) | 11434 |
-| `ollama_init` | Pull modello one-shot all'avvio | — |
-| `searxng` | Meta-search engine JSON | 8080 |
-| `searxng_redis` | Cache Redis per SearXNG | 6379 |
+| `worker` | APScheduler — scheduled watchlists | — |
+| `postgres` | PostgreSQL 16 database | 5432 |
+| `ollama` | Local LLM (Markdown digests) | 11434 |
+| `ollama_init` | One-shot model pull at startup | — |
+| `searxng` | JSON meta-search engine | 8080 |
+| `searxng_redis` | Redis cache for SearXNG | 6379 |
 
-## Arresto e pulizia
+## Stop and Cleanup
 
 ```bash
-# Arresto (mantiene volumi/dati)
+# Stop (keeps volumes/data)
 docker compose down
 
-# Arresto e rimozione volumi (reset completo)
+# Stop and remove volumes (full reset)
 docker compose down -v
 ```
 
-## Aggiornamento
+## Update
 
 ```bash
 docker compose down

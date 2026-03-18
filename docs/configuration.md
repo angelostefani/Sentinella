@@ -1,78 +1,78 @@
-# Configurazione
+# Configuration
 
-Tutte le variabili d'ambiente sono definite nel file `.env` (partire da `.env.example`).
+All environment variables are defined in `.env` (starting from `.env.example`).
 
-## Variabili obbligatorie
+## Required Variables
 
-| Variabile | Default | Descrizione |
+| Variable | Default | Description |
 |-----------|---------|-------------|
-| `JWT_SECRET` | — | Segreto HMAC per la firma JWT. **Non ha default — deve essere impostato.** |
+| `JWT_SECRET` | — | HMAC secret for JWT signing. **No default — must be set.** |
 
-## Generali
+## General
 
-| Variabile | Default | Descrizione |
+| Variable | Default | Description |
 |-----------|---------|-------------|
-| `TZ` | `Europe/Rome` | Timezone per cron, log e scheduler. Non hardcoded nel codice. |
+| `TZ` | `Europe/Rome` | Timezone used for cron, logs, and scheduler. Not hardcoded in code. |
 
-## Autenticazione JWT
+## JWT Authentication
 
-| Variabile | Default | Descrizione |
+| Variable | Default | Description |
 |-----------|---------|-------------|
-| `JWT_SECRET` | — | Segreto per firma HS256 |
-| `JWT_EXPIRE_HOURS` | `12` | Durata del token in ore |
+| `JWT_SECRET` | — | Secret for HS256 signing |
+| `JWT_EXPIRE_HOURS` | `12` | Token lifetime in hours |
 
 ## Ollama (LLM)
 
-| Variabile | Default | Descrizione |
+| Variable | Default | Description |
 |-----------|---------|-------------|
-| `OLLAMA_URL` | `http://ollama:11434` | URL del servizio Ollama |
-| `OLLAMA_MODEL` | `llama3.2` | Modello da usare per il digest |
+| `OLLAMA_URL` | `http://ollama:11434` | Ollama service URL |
+| `OLLAMA_MODEL` | `llama3.2` | Model used for digests |
 
-## SearXNG (ricerca)
+## SearXNG (Search)
 
-| Variabile | Default | Descrizione |
+| Variable | Default | Description |
 |-----------|---------|-------------|
-| `SEARXNG_URL` | `http://searxng:8080` | URL del servizio SearXNG |
+| `SEARXNG_URL` | `http://searxng:8080` | SearXNG service URL |
 
-## Rate limiting
+## Rate Limiting
 
-| Variabile | Default | Descrizione |
+| Variable | Default | Description |
 |-----------|---------|-------------|
-| `RATE_LIMIT_RPM` | `60` | Massimo richieste al minuto per `POST /api/ask` e `POST /api/watchlist/{id}/run` |
+| `RATE_LIMIT_RPM` | `60` | Maximum requests per minute for `POST /api/ask` and `POST /api/watchlist/{id}/run` |
 
-> Il rate limiter è in-memory (per processo). Per produzione multi-istanza considerare Redis.
+> The rate limiter is in-memory (per process). For multi-instance production use, consider Redis.
 
-## Limiti fetch/extract
+## Fetch/Extract Limits
 
-| Variabile | Default | Descrizione |
+| Variable | Default | Description |
 |-----------|---------|-------------|
-| `MAX_FETCH_BYTES` | `2000000` | Dimensione massima risposta HTTP (2 MB) |
-| `FETCH_TIMEOUT_S` | `15` | Timeout in secondi per ogni fetch URL |
-| `MAX_TEXT_CHARS_PER_SOURCE` | `4000` | Caratteri massimi estratti per fonte |
+| `MAX_FETCH_BYTES` | `2000000` | Maximum HTTP response size (2 MB) |
+| `FETCH_TIMEOUT_S` | `15` | Timeout in seconds for each URL fetch |
+| `MAX_TEXT_CHARS_PER_SOURCE` | `4000` | Maximum extracted characters per source |
 
-## Worker (scheduler)
+## Worker (Scheduler)
 
-| Variabile | Default | Descrizione |
+| Variable | Default | Description |
 |-----------|---------|-------------|
-| `WORKER_MAX_WORKERS` | `4` | Thread pool del BackgroundScheduler |
-| `WATCHLIST_SYNC_INTERVAL_S` | `30` | Intervallo in secondi per sincronizzare job da DB |
-| `WATCH_JITTER_MAX_S` | `30` | Jitter casuale massimo (secondi) prima di ogni run per evitare burst |
+| `WORKER_MAX_WORKERS` | `4` | BackgroundScheduler thread pool size |
+| `WATCHLIST_SYNC_INTERVAL_S` | `30` | Interval in seconds for syncing jobs from DB |
+| `WATCH_JITTER_MAX_S` | `30` | Maximum random jitter (seconds) before each run to avoid bursts |
 
 ## Database
 
-| Variabile | Default | Descrizione |
+| Variable | Default | Description |
 |-----------|---------|-------------|
 | `DATABASE_URL` | `postgresql+psycopg://assistant:assistant@postgres:5432/assistant` | SQLAlchemy connection string |
-| `POSTGRES_USER` | `assistant` | Utente PostgreSQL |
-| `POSTGRES_PASSWORD` | `assistant` | Password PostgreSQL |
-| `POSTGRES_DB` | `assistant` | Nome database |
+| `POSTGRES_USER` | `assistant` | PostgreSQL user |
+| `POSTGRES_PASSWORD` | `assistant` | PostgreSQL password |
+| `POSTGRES_DB` | `assistant` | Database name |
 
-## Esempio `.env`
+## Example `.env`
 
 ```env
 TZ=Europe/Rome
 
-JWT_SECRET=cambia_questo_valore_con_qualcosa_di_sicuro
+JWT_SECRET=replace_this_value_with_something_secure
 JWT_EXPIRE_HOURS=12
 
 OLLAMA_URL=http://ollama:11434

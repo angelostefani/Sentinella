@@ -1,25 +1,25 @@
-# Sentinella — Documentazione
+# Sentinella — Documentation
 
-**Sentinella** è una web app self-hosted in LAN per ricerca web intelligente con digest AI, watchlist schedulate e gestione multiutente.
+**Sentinella** is a self-hosted LAN web app for intelligent web search, AI digests, scheduled watchlists, and multi-user management.
 
-## Indice
+## Index
 
-| Documento | Descrizione |
+| Document | Description |
 |-----------|-------------|
-| [setup.md](setup.md) | Installazione, avvio con Docker Compose, verifica |
-| [architecture.md](architecture.md) | Architettura, servizi, stack tecnologico |
-| [configuration.md](configuration.md) | Variabili d'ambiente e configurazione |
-| [api.md](api.md) | Riferimento completo API REST |
-| [data-model.md](data-model.md) | Schema del database PostgreSQL |
-| [user-guide.md](user-guide.md) | Manuale utente (UI e operazioni comuni) |
-| [development.md](development.md) | Testing, backup, troubleshooting, sviluppo |
+| [setup.md](setup.md) | Installation, Docker Compose startup, and verification |
+| [architecture.md](architecture.md) | Architecture, services, and technology stack |
+| [configuration.md](configuration.md) | Environment variables and configuration |
+| [api.md](api.md) | Complete REST API reference |
+| [data-model.md](data-model.md) | PostgreSQL database schema |
+| [user-guide.md](user-guide.md) | User guide (UI and common operations) |
+| [development.md](development.md) | Testing, backup, troubleshooting, and development |
 
-## In breve
+## At a Glance
 
-```
+```bash
 docker compose up --build
 # UI: http://localhost:8001
 # Login: admin / admin123
 ```
 
-> **Attenzione**: cambiare la password admin al primo accesso.
+> **Warning**: change the admin password on first login.

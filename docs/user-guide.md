@@ -1,139 +1,139 @@
-# Manuale Utente
+# User Guide
 
-## Accesso
+## Access
 
-1. Apri `http://localhost:8001` nel browser.
-2. Inserisci le credenziali e premi **Login**.
-3. Credenziali default: `admin` / `admin123` — cambiarle subito.
+1. Open `http://localhost:8001` in your browser.
+2. Enter your credentials and click **Login**.
+3. Default credentials: `admin` / `admin123` — change them immediately.
 
-Dopo il login sei reindirizzato alla pagina **Ask**.
+After login you are redirected to the **Ask** page.
 
 ---
 
-## Navigazione
+## Navigation
 
-| Pagina | Percorso | Accesso |
+| Page | Route | Access |
 |--------|----------|---------|
-| Ask | `/ask` | Tutti |
-| Watchlist | `/watchlist` | Tutti |
-| Runs | `/runs` | Tutti |
-| Admin Users | `/admin/users` | Solo admin |
+| Ask | `/ask` | Everyone |
+| Watchlist | `/watchlist` | Everyone |
+| Runs | `/runs` | Everyone |
+| Admin Users | `/admin/users` | Admin only |
 
 ---
 
-## Ask — Ricerca immediata
+## Ask — Immediate Search
 
-La pagina **Ask** esegue una ricerca web one-shot e genera un digest Markdown.
+The **Ask** page runs a one-shot web search and generates a Markdown digest.
 
-**Passaggi:**
-1. Inserisci la query nel campo testo.
-2. (Opzionale) Modifica i filtri avanzati se necessario.
-3. Premi **Run**.
-4. Attendi il digest — può richiedere qualche secondo (dipende da Ollama).
+**Steps:**
+1. Enter the query in the text field.
+2. Optionally adjust advanced filters if needed.
+3. Click **Run**.
+4. Wait for the digest — it may take a few seconds depending on Ollama.
 
-**Cosa succede internamente:**
-- La query viene inviata a SearXNG
-- I risultati vengono scaricati e il testo estratto
-- Ollama genera un riassunto in Markdown con fonti citate
-- Il run viene salvato nello storico
+**What happens internally:**
+- The query is sent to SearXNG
+- Results are fetched and text is extracted
+- Ollama generates a Markdown summary with cited sources
+- The run is saved in the history
 
 ---
 
-## Watchlist — Ricerche schedulate
+## Watchlist — Scheduled Searches
 
-### Watchlist personali
+### Personal Watchlists
 
-Sono ricerche ricorrenti gestite da ogni utente per sé stesso.
+These are recurring searches managed by each user for their own account.
 
-**Creare una watchlist personale:**
-1. Vai su **Watchlist**.
-2. Compila il form:
-   - **Name**: nome descrittivo
-   - **Query**: testo della ricerca
-   - **Cron**: schedulazione (es. `0 8 * * *` = ogni giorno alle 8)
-   - **Recency days**: quanti giorni indietro cercare
-   - **Max results**: numero massimo di risultati
-   - **Domains allow**: domini da includere (separati da virgola)
-   - **Domains block**: domini da escludere
-3. Premi **Create personal**.
+**Create a personal watchlist:**
+1. Go to **Watchlist**.
+2. Fill in the form:
+   - **Name**: descriptive name
+   - **Query**: search text
+   - **Cron**: schedule (for example `0 8 * * *` = every day at 8)
+   - **Recency days**: how many days back to search
+   - **Max results**: maximum number of results
+   - **Domains allow**: domains to include (comma-separated)
+   - **Domains block**: domains to exclude
+3. Click **Create personal**.
 
-**Eseguire manualmente:**
-- Usa il pulsante **Run now** accanto alla watchlist.
+**Run manually:**
+- Use the **Run now** button next to the watchlist.
 
-**Sintassi cron (esempi):**
+**Cron syntax examples:**
 
-| Cron | Significato |
+| Cron | Meaning |
 |------|-------------|
-| `0 8 * * *` | Ogni giorno alle 8:00 |
-| `0 9 * * 1` | Ogni lunedì alle 9:00 |
-| `*/10 * * * *` | Ogni 10 minuti (per test) |
-| `0 8 * * 1-5` | Ogni giorno feriale alle 8:00 |
+| `0 8 * * *` | Every day at 08:00 |
+| `0 9 * * 1` | Every Monday at 09:00 |
+| `*/10 * * * *` | Every 10 minutes (for testing) |
+| `0 8 * * 1-5` | Every weekday at 08:00 |
 
-### Watchlist globali (admin)
+### Global Watchlists (admin)
 
-Gestite solo dall'admin tramite API. Visibili a tutti gli utenti in read-only.
-
----
-
-## Runs — Storico esecuzioni
-
-La pagina **Runs** mostra le ultime 100 esecuzioni.
-
-Per ogni run è disponibile:
-- ID e query
-- Data/ora di esecuzione
-- Dettaglio completo con digest e lista fonti (via API: `GET /api/runs/{id}`)
-
-**Visibilità:**
-- **admin**: vede tutti i run
-- **user**: vede solo i propri (da Ask + watchlist personali)
+Managed only by the admin through the API. Visible to all users in read-only mode.
 
 ---
 
-## Admin Users (solo admin)
+## Runs — Execution History
 
-La pagina **Admin Users** permette di:
-- Creare nuovi utenti con ruolo `admin` o `user`
-- Vedere l'elenco degli utenti
-- Disattivare o resettare la password di un utente (via API)
+The **Runs** page shows the latest 100 executions.
+
+For each run you can access:
+- ID and query
+- Execution date/time
+- Full detail with digest and source list (via API: `GET /api/runs/{id}`)
+
+**Visibility:**
+- **admin**: sees all runs
+- **user**: sees only their own runs (from Ask + personal watchlists)
 
 ---
 
-## Ruoli e permessi
+## Admin Users (admin only)
 
-| Azione | admin | user |
+The **Admin Users** page allows you to:
+- Create new users with role `admin` or `user`
+- View the user list
+- Deactivate a user or reset their password (via API)
+
+---
+
+## Roles and Permissions
+
+| Action | admin | user |
 |--------|:-----:|:----:|
-| Ricerca Ask | ✓ | ✓ |
-| Vedere watchlist globali | ✓ | ✓ (read-only) |
-| Creare watchlist personali | ✓ | ✓ |
-| Modificare proprie watchlist | ✓ | ✓ |
-| Creare/modificare watchlist globali | ✓ | ✗ |
-| Eseguire Run now (proprie) | ✓ | ✓ |
-| Eseguire Run now (tutte) | ✓ | ✗ |
-| Vedere tutti i run | ✓ | ✗ |
-| Gestire utenti | ✓ | ✗ |
+| Ask search | ✓ | ✓ |
+| View global watchlists | ✓ | ✓ (read-only) |
+| Create personal watchlists | ✓ | ✓ |
+| Edit own watchlists | ✓ | ✓ |
+| Create/edit global watchlists | ✓ | ✗ |
+| Run now (own watchlists) | ✓ | ✓ |
+| Run now (all watchlists) | ✓ | ✗ |
+| View all runs | ✓ | ✗ |
+| Manage users | ✓ | ✗ |
 
 ---
 
 ## Troubleshooting
 
-| Problema | Causa probabile | Soluzione |
+| Problem | Likely Cause | Solution |
 |----------|-----------------|-----------|
-| Login non riuscito | Credenziali errate o utente disattivato | Verifica username/password; contatta admin |
-| Nessun risultato | Query troppo generica o filtri restrittivi | Modifica query o rimuovi filtri dominio |
-| Watchlist non esegue | Cron errato, `enabled=false`, worker fermo | Controlla cron syntax, stato enabled, log worker |
-| Errore 429 | Rate limit superato | Attendi qualche minuto |
-| Digest assente | SearXNG o Ollama non raggiungibili | Verifica `docker compose logs api worker` |
-| UI bianca o errori JS | Cache browser obsoleta | Ricarica con Ctrl+Shift+R |
+| Login failed | Wrong credentials or deactivated user | Verify username/password; contact admin |
+| No results | Query too generic or restrictive filters | Refine the query or remove domain filters |
+| Watchlist does not run | Invalid cron, `enabled=false`, worker stopped | Check cron syntax, enabled status, worker logs |
+| Error 429 | Rate limit exceeded | Wait a few minutes |
+| Missing digest | SearXNG or Ollama unreachable | Check `docker compose logs api worker` |
+| Blank UI or JS errors | Stale browser cache | Reload with Ctrl+Shift+R |
 
 ---
 
-## Checklist operativa
+## Operational Checklist
 
-- [ ] Login admin funzionante
-- [ ] Creazione utente test
-- [ ] Ask produce digest Markdown
-- [ ] Watchlist personale creata con cron `*/10 * * * *`
-- [ ] Run now eseguito con successo
-- [ ] Run visibile nello storico
-- [ ] Worker produce run schedulati automatici
+- [ ] Admin login works
+- [ ] Test user created
+- [ ] Ask produces a Markdown digest
+- [ ] Personal watchlist created with cron `*/10 * * * *`
+- [ ] Run now executed successfully
+- [ ] Run visible in history
+- [ ] Worker produces scheduled runs automatically

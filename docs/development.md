@@ -1,8 +1,8 @@
-# Sviluppo, Testing e Operazioni
+# Development, Testing, and Operations
 
-## Testing manuale con curl
+## Manual Testing with curl
 
-Imposta la base URL:
+Set the base URL:
 ```bash
 export BASE="http://localhost:8001"
 ```
@@ -12,24 +12,24 @@ export BASE="http://localhost:8001"
 curl -s "$BASE/api/health"
 ```
 
-### 2. Login admin
+### 2. Admin login
 ```bash
 curl -s -X POST "$BASE/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}'
 ```
 
-### 3. Salva il token
+### 3. Save the token
 ```bash
-export TOKEN="<incolla_token_admin>"
+export TOKEN="<paste_admin_token>"
 ```
 
-### 4. Verifica utente corrente
+### 4. Check current user
 ```bash
 curl -s "$BASE/api/me" -H "Authorization: Bearer $TOKEN"
 ```
 
-### 5. Crea utente
+### 5. Create user
 ```bash
 curl -s -X POST "$BASE/api/admin/users" \
   -H "Authorization: Bearer $TOKEN" \
@@ -37,16 +37,16 @@ curl -s -X POST "$BASE/api/admin/users" \
   -d '{"username":"mario","password":"password123","role":"user"}'
 ```
 
-### 6. Login utente
+### 6. User login
 ```bash
 curl -s -X POST "$BASE/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"mario","password":"password123"}'
 
-export TOKEN_USER="<incolla_token_user>"
+export TOKEN_USER="<paste_user_token>"
 ```
 
-### 7. Crea watchlist personale (cron ogni 10 minuti per test)
+### 7. Create personal watchlist (cron every 10 minutes for testing)
 ```bash
 curl -s -X POST "$BASE/api/watchlist/personal" \
   -H "Authorization: Bearer $TOKEN_USER" \
@@ -63,65 +63,65 @@ curl -s -X POST "$BASE/api/watchlist/personal" \
   }'
 ```
 
-### 8. Lista watchlist
+### 8. List watchlists
 ```bash
 curl -s "$BASE/api/watchlist" -H "Authorization: Bearer $TOKEN_USER"
 ```
 
-### 9. Run manuale
+### 9. Manual run
 ```bash
-export WATCH_ID="<incolla_id_watch>"
+export WATCH_ID="<paste_watch_id>"
 curl -s -X POST "$BASE/api/watchlist/$WATCH_ID/run" \
   -H "Authorization: Bearer $TOKEN_USER"
 ```
 
-### 10. Lista runs
+### 10. List runs
 ```bash
 curl -s "$BASE/api/runs" -H "Authorization: Bearer $TOKEN_USER"
 ```
 
-### 11. Dettaglio run
+### 11. Run detail
 ```bash
-export RUN_ID="<incolla_run_id>"
+export RUN_ID="<paste_run_id>"
 curl -s "$BASE/api/runs/$RUN_ID" -H "Authorization: Bearer $TOKEN_USER"
 ```
 
 ---
 
-## Verifica dei servizi
+## Service Verification
 
-### Log worker (schedulazione)
+### Worker logs (scheduling)
 ```bash
 docker compose logs -f worker
 ```
 
-### Verifica SearXNG JSON
+### Verify SearXNG JSON
 ```bash
 docker compose exec api python -c \
   "import os,httpx; print(httpx.get(os.getenv('SEARXNG_URL') + '/search', params={'q':'test','format':'json'}).status_code)"
 ```
 
-### Verifica Ollama
+### Verify Ollama
 ```bash
 curl -s "http://localhost:11434/api/tags"
 ```
 
-### Stato servizi Docker
+### Docker service status
 ```bash
 docker compose ps
 ```
 
 ---
 
-## Filtri domini — comportamento
+## Domain Filters — Behavior
 
-- `domains_allow`: se non vuoto, accetta **solo** URL di quei domini
-- `domains_block`: esclude sempre i domini indicati
-- `domains_allow` ha priorità su `domains_block`
-- Normalizzazione: `www.` rimosso, case-insensitive
-- Wildcard: `*.example.com` matcha tutti i sottodomini
+- `domains_allow`: if not empty, accepts **only** URLs from those domains
+- `domains_block`: always excludes the listed domains
+- `domains_allow` has priority over `domains_block`
+- Normalization: `www.` removed, case-insensitive
+- Wildcard: `*.example.com` matches all subdomains
 
-**Mapping `recency_days` → `time_range` SearXNG:**
+**`recency_days` → `time_range` SearXNG mapping:**
 
 | recency_days | time_range |
 |:---:|:---:|
@@ -132,9 +132,9 @@ docker compose ps
 
 ---
 
-## Logging strutturato
+## Structured Logging
 
-API e Worker emettono log JSON su stdout:
+API and Worker emit JSON logs to stdout:
 
 ```json
 {
@@ -152,75 +152,75 @@ API e Worker emettono log JSON su stdout:
 ```
 
 ```bash
-# Seguire i log in real-time
+# Follow logs in real time
 docker compose logs -f api
 docker compose logs -f worker
 
-# Filtrare solo errori
+# Filter only errors
 docker compose logs api | grep '"level":"ERROR"'
 ```
 
 ---
 
-## Backup database
+## Database Backup
 
 ```bash
-# Dump manuale
+# Manual dump
 docker compose exec -T postgres pg_dump -U assistant assistant > backup.sql
 
-# Ripristino
+# Restore
 docker compose exec -T postgres psql -U assistant assistant < backup.sql
 ```
 
-Cron giornaliero sull'host:
+Daily cron on the host:
 ```bash
 0 2 * * * cd /path/to/sentinella && docker compose exec -T postgres pg_dump -U assistant assistant > /backup/sentinella_$(date +\%F).sql
 ```
 
 ---
 
-## Struttura del codice
+## Code Structure
 
 ```
 Sentinella/
 ├── api/app/
-│   ├── main.py          # FastAPI app, endpoint, middleware, bootstrap
-│   ├── models.py        # SQLAlchemy ORM (User, Watchlist, Run, SeenItem)
-│   ├── schemas.py       # Pydantic request/response schemas
-│   ├── config.py        # Settings da env (pydantic)
-│   ├── db.py            # Session e engine database
-│   ├── security.py      # JWT e bcrypt
-│   ├── deps.py          # Dependency injection (auth)
-│   ├── pipeline.py      # search_web, fetch_extract, digest_markdown
-│   ├── domain_filters.py # Filtraggio domini e mapping recency
-│   ├── rate_limit.py    # InMemoryRateLimiter
-│   └── logging_utils.py # JsonFormatter
+│   ├── main.py           # FastAPI app, endpoints, middleware, bootstrap
+│   ├── models.py         # SQLAlchemy ORM (User, Watchlist, Run, SeenItem)
+│   ├── schemas.py        # Pydantic request/response schemas
+│   ├── config.py         # Settings from env (pydantic)
+│   ├── db.py             # Database session and engine
+│   ├── security.py       # JWT and bcrypt
+│   ├── deps.py           # Dependency injection (auth)
+│   ├── pipeline.py       # search_web, fetch_extract, digest_markdown
+│   ├── domain_filters.py # Domain filtering and recency mapping
+│   ├── rate_limit.py     # InMemoryRateLimiter
+│   └── logging_utils.py  # JsonFormatter
 ├── worker/app/
-│   ├── main.py          # BackgroundScheduler, sync_jobs, run_watch
-│   ├── models.py        # ORM sola lettura
-│   ├── config.py        # Settings
-│   ├── pipeline.py      # Pipeline (versione worker)
-│   └── logging_utils.py # JsonFormatter
+│   ├── main.py           # BackgroundScheduler, sync_jobs, run_watch
+│   ├── models.py         # Read-only ORM
+│   ├── config.py         # Settings
+│   ├── pipeline.py       # Pipeline (worker version)
+│   └── logging_utils.py  # JsonFormatter
 ├── frontend/src/
-│   ├── main.jsx         # Entry point React + routing
-│   ├── App.jsx          # Componenti pagine + api() wrapper
+│   ├── main.jsx          # React entry point + routing
+│   ├── App.jsx           # Page components + api() wrapper
 │   └── styles.css
-├── nginx/nginx.conf     # Reverse proxy
-├── searxng/settings.yml # Abilita formato JSON
+├── nginx/nginx.conf      # Reverse proxy
+├── searxng/settings.yml  # Enables JSON format
 ├── docker-compose.yml
 ├── .env.example
-└── docs/                # Questa documentazione
+└── docs/                 # This documentation
 ```
 
 ---
 
-## Checklist deploy
+## Deployment Checklist
 
-- [ ] `docker compose up --build` completato senza errori
-- [ ] UI raggiungibile su `http://localhost:8001`
-- [ ] `GET /api/health` restituisce `{"status":"ok"}`
-- [ ] Login admin funzionante
-- [ ] SearXNG risponde JSON (status 200)
-- [ ] Ollama ha il modello scaricato (`/api/tags`)
-- [ ] Creazione watch con `*/10 * * * *` produce run automatici
-- [ ] Password admin cambiata
+- [ ] `docker compose up --build` completed without errors
+- [ ] UI reachable at `http://localhost:8001`
+- [ ] `GET /api/health` returns `{"status":"ok"}`
+- [ ] Admin login works
+- [ ] SearXNG responds with JSON (status 200)
+- [ ] Ollama has the model downloaded (`/api/tags`)
+- [ ] Creating a watch with `*/10 * * * *` produces automatic runs
+- [ ] Admin password changed
