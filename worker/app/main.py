@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .logging_utils import get_logger
 from .models import Run, Watchlist
-from .pipeline import digest_markdown, hash_url, search_web
+from .pipeline import digest_markdown, fetch_extract, hash_url, search_web
 
 logger = get_logger()
 engine = create_engine(settings.database_url, future=True)
@@ -28,8 +28,14 @@ def run_watch(watch_id: int):
             if not watch or not watch.enabled:
                 return
             items = search_web(watch.query, watch.recency_days, watch.max_results, watch.domains_allow, watch.domains_block)
+            for item in items:
+                try:
+                    fetched = fetch_extract(item["url"])
+                    item["content"] = fetched or item.pop("snippet", "")
+                except Exception:
+                    item["content"] = item.pop("snippet", "")
             try:
-                digest = digest_markdown(watch.query, items, language=getattr(watch, "output_language", "italiano"))
+                digest = digest_markdown(watch.query, items, language=getattr(watch, "output_language", "italiano"), custom_prompt=getattr(watch, "custom_prompt", None))
             except Exception as exc:
                 digest = ""
                 logger.error(f"digest failed watch={watch.id}", extra={"error": str(exc)})

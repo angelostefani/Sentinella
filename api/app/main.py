@@ -75,6 +75,7 @@ def startup():
     with Session(engine) as db:
         db.execute(text("ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'"))
         db.execute(text("ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS output_language VARCHAR(50) DEFAULT 'italiano'"))
+        db.execute(text("ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS custom_prompt TEXT"))
         db.commit()
     with Session(engine) as db:
         first_user = db.scalar(select(User).limit(1))
@@ -220,6 +221,7 @@ def run_query(
     domains_allow: list[str], domains_block: list[str],
     watch_id: int | None, user_id: int | None,
     output_language: str = "italiano",
+    custom_prompt: str | None = None,
 ):
     items = search_web(query, recency_days, max_results, domains_allow, domains_block)
     for item in items:
@@ -228,7 +230,7 @@ def run_query(
             item["content"] = fetched or item.pop("snippet", "")
         except Exception:
             item["content"] = item.pop("snippet", "")
-    digest = digest_markdown(query, items, language=output_language)
+    digest = digest_markdown(query, items, language=output_language, custom_prompt=custom_prompt)
     run = Run(watch_id=watch_id, user_id=user_id, query=query, items=items, digest_md=digest)
     db.add(run)
     db.flush()
@@ -254,7 +256,7 @@ def ask(payload: AskIn, user: User = Depends(get_current_user), db: Session = De
     return run_query(
         db, payload.query, payload.recency_days, payload.max_results,
         payload.domains_allow, payload.domains_block,
-        None, user.id, payload.output_language,
+        None, user.id, payload.output_language, payload.custom_prompt,
     )
 
 
@@ -263,10 +265,26 @@ def ask(payload: AskIn, user: User = Depends(get_current_user), db: Session = De
 @app.get("/api/watchlist", response_model=list[WatchOut])
 def list_watchlist(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if user.role == "admin":
-        return list(db.scalars(select(Watchlist).order_by(Watchlist.id.desc())).all())
-    return list(db.scalars(select(Watchlist).where(
-        (Watchlist.scope == "global") | (Watchlist.owner_user_id == user.id)
-    ).order_by(Watchlist.id.desc())).all())
+        watches = list(db.scalars(select(Watchlist).order_by(Watchlist.id.desc())).all())
+    else:
+        watches = list(db.scalars(select(Watchlist).where(
+            (Watchlist.scope == "global") | (Watchlist.owner_user_id == user.id)
+        ).order_by(Watchlist.id.desc())).all())
+    watch_ids = [w.id for w in watches]
+    last_runs: dict = {}
+    if watch_ids:
+        rows = db.execute(
+            select(Run.watch_id, func.max(Run.created_at).label("last"))
+            .where(Run.watch_id.in_(watch_ids))
+            .group_by(Run.watch_id)
+        ).all()
+        last_runs = {r.watch_id: r.last for r in rows}
+    result = []
+    for w in watches:
+        d = {c.name: getattr(w, c.name) for c in w.__table__.columns}
+        d["last_run_at"] = last_runs.get(w.id)
+        result.append(WatchOut(**d))
+    return result
 
 
 def upsert_watch(scope: str, watch_id: int | None, payload: WatchIn, user: User, db: Session):
@@ -291,6 +309,7 @@ def upsert_watch(scope: str, watch_id: int | None, payload: WatchIn, user: User,
     watch.domains_block = payload.domains_block
     watch.tags = payload.tags
     watch.output_language = payload.output_language
+    watch.custom_prompt = payload.custom_prompt or None
     db.commit()
     db.refresh(watch)
     return watch
@@ -373,8 +392,22 @@ def run_watch_now(watch_id: int, user: User = Depends(get_current_user), db: Ses
     return run_query(
         db, watch.query, watch.recency_days, watch.max_results,
         watch.domains_allow, watch.domains_block,
-        watch.id, run_user_id, watch.output_language,
+        watch.id, run_user_id, watch.output_language, watch.custom_prompt,
     )
+
+
+@app.delete("/api/watchlist/{watch_id}/seen-items")
+def reset_seen_items(watch_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    watch = db.get(Watchlist, watch_id)
+    if not watch:
+        raise HTTPException(status_code=404, detail="not found")
+    if watch.scope == "global" and user.role != "admin":
+        raise HTTPException(status_code=403, detail="admin only")
+    if watch.scope == "personal" and watch.owner_user_id != user.id and user.role != "admin":
+        raise HTTPException(status_code=403, detail="forbidden")
+    db.query(SeenItem).filter(SeenItem.watch_id == watch_id).delete()
+    db.commit()
+    return {"ok": True}
 
 
 # ─── Runs ─────────────────────────────────────────────────────────────────────

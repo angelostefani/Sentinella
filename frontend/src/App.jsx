@@ -11,7 +11,7 @@ const api = async (path, options = {}) => {
   if (res.status === 401) {
     localStorage.removeItem('token')
     window.location.href = '/login'
-    throw new Error('Sessione scaduta. Effettua di nuovo il login.')
+    throw new Error('Session expired. Please log in again.')
   }
   const text = await res.text()
   let data = {}
@@ -19,7 +19,7 @@ const api = async (path, options = {}) => {
     try { data = JSON.parse(text) }
     catch { data = { detail: text } }
   }
-  if (!res.ok) throw new Error(data?.detail || `Richiesta fallita (${res.status})`)
+  if (!res.ok) throw new Error(data?.detail || `Request failed (${res.status})`)
   return data
 }
 
@@ -92,6 +92,29 @@ function MarkdownView({ content }) {
   )
 }
 
+// ─── Toast system ─────────────────────────────────────────────────────────────
+
+let _addToast = null
+
+function showToast(message, type = 'success') {
+  if (_addToast) _addToast({ message, type, id: Date.now() + Math.random() })
+}
+
+function ToastContainer() {
+  const [toasts, setToasts] = useState([])
+  _addToast = (t) => {
+    setToasts(prev => [...prev, t])
+    setTimeout(() => setToasts(prev => prev.filter(x => x.id !== t.id)), 3500)
+  }
+  return (
+    <div className="toast-container">
+      {toasts.map(t => (
+        <div key={t.id} className={`toast toast-${t.type}`}>{t.message}</div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Micro components ─────────────────────────────────────────────────────────
 
 function Spinner() { return <span className="spinner" /> }
@@ -115,6 +138,15 @@ function EmptyState({ icon, text }) {
       <div className="empty-state-icon">{icon}</div>
       <div className="empty-state-text">{text}</div>
     </div>
+  )
+}
+
+function Tooltip({ text }) {
+  return (
+    <span className="tooltip-wrap">
+      <span className="tooltip-icon">?</span>
+      <span className="tooltip-box">{text}</span>
+    </span>
   )
 }
 
@@ -193,7 +225,7 @@ function Layout({ children }) {
     { to: '/runs',        label: 'Runs',        icon: '📋' },
     ...(isAdmin ? [
       { to: '/admin/users', label: 'Admin Users', icon: '👤' },
-      { to: '/admin/stats', label: 'Statistiche', icon: '📊' },
+      { to: '/admin/stats', label: 'Statistics', icon: '📊' },
     ] : []),
   ]
 
@@ -229,7 +261,7 @@ function Layout({ children }) {
             className="btn-logout"
             style={{ marginBottom: 6, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}
           >
-            <span>⚙</span> Profilo
+            <span>⚙</span> Profile
           </Link>
           <button className="btn-logout" onClick={logout}>
             <span>⏻</span> Logout
@@ -238,6 +270,7 @@ function Layout({ children }) {
       </aside>
 
       <main>{children}</main>
+      <ToastContainer />
     </div>
   )
 }
@@ -265,7 +298,7 @@ function Login() {
         nav('/ask')
       }
     } catch (err) {
-      setError(err?.message || 'Credenziali non valide')
+      setError(err?.message || 'Invalid credentials')
     } finally {
       setLoading(false)
     }
@@ -294,7 +327,7 @@ function Login() {
           </div>
           {error && <Alert type="error">{error}</Alert>}
           <button className="btn btn-primary" disabled={loading || !username || !password}>
-            {loading ? <><Spinner /> Accesso in corso…</> : 'Accedi'}
+            {loading ? <><Spinner /> Signing in…</> : 'Sign in'}
           </button>
         </form>
       </div>
@@ -307,6 +340,11 @@ function Login() {
 function Ask() {
   const [query, setQuery] = useState('')
   const [language, setLanguage] = useState('italiano')
+  const [recencyDays, setRecencyDays] = useState(7)
+  const [maxResults, setMaxResults] = useState(5)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [customPrompt, setCustomPrompt] = useState('')
+  const [showPrompt, setShowPrompt] = useState(false)
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -317,11 +355,11 @@ function Ask() {
     try {
       const out = await api('/api/ask', {
         method: 'POST',
-        body: JSON.stringify({ query, recency_days: 7, max_results: 5, domains_allow: [], domains_block: [], output_language: language }),
+        body: JSON.stringify({ query, recency_days: recencyDays, max_results: maxResults, domains_allow: [], domains_block: [], output_language: language, custom_prompt: customPrompt || null }),
       })
       setResult(out)
     } catch (err) {
-      setError(err?.message || 'Errore durante la ricerca')
+      setError(err?.message || 'Search error')
     } finally {
       setLoading(false)
     }
@@ -331,26 +369,59 @@ function Ask() {
     <Layout>
       <div className="page-header">
         <div className="page-title">Ask</div>
-        <div className="page-subtitle">Ricerca web immediata con digest AI</div>
+        <div className="page-subtitle">Instant web search with AI digest</div>
       </div>
 
       <div className="card">
         <form onSubmit={submit} className="form-stack">
           <div className="form-group">
-            <label>Query</label>
-            <textarea rows={3} placeholder="Es. qdrant release changelog, novità kubernetes 1.30…"
+            <label>Query <Tooltip text='Topic or question to gather information on. E.g. "kubernetes 1.30 news", "qdrant release changelog"' /></label>
+            <textarea rows={3} placeholder="E.g. qdrant release changelog, kubernetes 1.30 news…"
               value={query} onChange={e => setQuery(e.target.value)} />
           </div>
           <div className="form-group" style={{ maxWidth: 220 }}>
-            <label>Lingua output</label>
+            <label>Output language <Tooltip text="Language the AI will use to write the digest. Does not affect the web search language." /></label>
             <select value={language} onChange={e => setLanguage(e.target.value)}>
               {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
+          <div>
+            <button type="button" className="btn btn-secondary btn-sm"
+              onClick={() => setShowAdvanced(p => !p)}>
+              {showAdvanced ? '▲ Hide options' : '▼ Advanced options'}
+            </button>
+          </div>
+          {showAdvanced && (
+            <div className="form-row">
+              <div className="form-group">
+                <label>Recency days <Tooltip text="Filter results to the last N days. 1 = today, 7 = week, 30 = month, 365 = year." /></label>
+                <input type="number" min={1} max={365} value={recencyDays}
+                  onChange={e => setRecencyDays(Number(e.target.value))} />
+              </div>
+              <div className="form-group">
+                <label>Max results <Tooltip text="Maximum number of sources to analyse (1–20). More sources = richer digest but slower execution." /></label>
+                <input type="number" min={1} max={20} value={maxResults}
+                  onChange={e => setMaxResults(Number(e.target.value))} />
+              </div>
+            </div>
+          )}
+          <div>
+            <button type="button" className="btn btn-secondary btn-sm"
+              onClick={() => setShowPrompt(p => !p)}>
+              {showPrompt ? '▲ Hide prompt' : '▼ Custom prompt'}
+            </button>
+          </div>
+          {showPrompt && (
+            <div className="form-group">
+              <label>Custom prompt <Tooltip text="Alternative instruction for the AI. Leave empty for the default prompt (title + bullets + sources). Query and sources are always appended automatically." /></label>
+              <textarea rows={3} placeholder="Leave empty to use the default prompt"
+                value={customPrompt} onChange={e => setCustomPrompt(e.target.value)} />
+            </div>
+          )}
           {error && <Alert type="error">{error}</Alert>}
           <div>
             <button className="btn btn-primary" disabled={loading || !query.trim()}>
-              {loading ? <><Spinner /> Elaborazione…</> : '🔍 Esegui ricerca'}
+              {loading ? <><Spinner /> Processing…</> : '🔍 Search'}
             </button>
           </div>
         </form>
@@ -365,7 +436,7 @@ function Ask() {
               <div className="page-subtitle">Run #{result.id} · {fmtDate(result.created_at)}</div>
             </div>
             <button className="btn btn-secondary btn-sm" onClick={() => downloadMd(result.digest_md, result.query)}>
-              ⬇ Scarica .md
+              ⬇ Download .md
             </button>
           </div>
           <MarkdownView content={result.digest_md} />
@@ -377,23 +448,23 @@ function Ask() {
 
 // ─── CronPicker ───────────────────────────────────────────────────────────────
 
-const DAYS_LABELS = ['D', 'L', 'M', 'X', 'G', 'V', 'S']
+const DAYS_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
 function parseCron(cron) {
   const hourlyMatch = cron.match(/^0 \*\/(\d+) \* \* \*$/)
-  if (hourlyMatch) return { mode: 'oraria', hours: Number(hourlyMatch[1]), time: '08:00', days: [1], raw: cron }
+  if (hourlyMatch) return { mode: 'hourly', hours: Number(hourlyMatch[1]), time: '08:00', days: [1], raw: cron }
   const dailyMatch = cron.match(/^(\d+) (\d+) \* \* \*$/)
-  if (dailyMatch) return { mode: 'giornaliera', hours: 6, time: `${dailyMatch[2].padStart(2,'0')}:${dailyMatch[1].padStart(2,'0')}`, days: [1], raw: cron }
+  if (dailyMatch) return { mode: 'daily', hours: 6, time: `${dailyMatch[2].padStart(2,'0')}:${dailyMatch[1].padStart(2,'0')}`, days: [1], raw: cron }
   const weeklyMatch = cron.match(/^(\d+) (\d+) \* \* ([\d,]+)$/)
-  if (weeklyMatch) return { mode: 'settimanale', hours: 6, time: `${weeklyMatch[2].padStart(2,'0')}:${weeklyMatch[1].padStart(2,'0')}`, days: weeklyMatch[3].split(',').map(Number), raw: cron }
-  return { mode: 'avanzato', hours: 6, time: '08:00', days: [1], raw: cron }
+  if (weeklyMatch) return { mode: 'weekly', hours: 6, time: `${weeklyMatch[2].padStart(2,'0')}:${weeklyMatch[1].padStart(2,'0')}`, days: weeklyMatch[3].split(',').map(Number), raw: cron }
+  return { mode: 'advanced', hours: 6, time: '08:00', days: [1], raw: cron }
 }
 
 function buildCron({ mode, hours, time, days, raw }) {
   const [hh, mm] = (time || '08:00').split(':').map(Number)
-  if (mode === 'oraria')      return `0 */${hours} * * *`
-  if (mode === 'giornaliera') return `${mm} ${hh} * * *`
-  if (mode === 'settimanale') return `${mm} ${hh} * * ${[...days].sort((a,b)=>a-b).join(',')}`
+  if (mode === 'hourly')  return `0 */${hours} * * *`
+  if (mode === 'daily')   return `${mm} ${hh} * * *`
+  if (mode === 'weekly')  return `${mm} ${hh} * * ${[...days].sort((a,b)=>a-b).join(',')}`
   return raw
 }
 
@@ -417,41 +488,41 @@ function CronPicker({ value, onChange }) {
   return (
     <div className="cron-picker">
       <select value={state.mode} onChange={e => update({ mode: e.target.value })}>
-        <option value="oraria">Oraria</option>
-        <option value="giornaliera">Giornaliera</option>
-        <option value="settimanale">Settimanale</option>
-        <option value="avanzato">Avanzato</option>
+        <option value="hourly">Hourly</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="advanced">Advanced</option>
       </select>
 
-      {state.mode === 'oraria' && (
+      {state.mode === 'hourly' && (
         <span className="cron-inline">
-          ogni&nbsp;
+          every&nbsp;
           <input type="number" min="1" max="23" value={state.hours}
             onChange={e => update({ hours: Math.max(1, Math.min(23, Number(e.target.value))) })} />
-          &nbsp;ore
+          &nbsp;hours
         </span>
       )}
 
-      {(state.mode === 'giornaliera') && (
+      {(state.mode === 'daily') && (
         <span className="cron-inline">
-          alle&nbsp;
+          at&nbsp;
           <input type="time" value={state.time} onChange={e => update({ time: e.target.value })} />
         </span>
       )}
 
-      {state.mode === 'settimanale' && (
+      {state.mode === 'weekly' && (
         <span className="cron-inline">
           {DAYS_LABELS.map((label, i) => (
             <button key={i} type="button"
               className={`day-btn${state.days.includes(i) ? ' active' : ''}`}
               onClick={() => toggleDay(i)}>{label}</button>
           ))}
-          &nbsp;alle&nbsp;
+          &nbsp;at&nbsp;
           <input type="time" value={state.time} onChange={e => update({ time: e.target.value })} />
         </span>
       )}
 
-      {state.mode === 'avanzato' && (
+      {state.mode === 'advanced' && (
         <input className="cron-raw" placeholder="* * * * *" value={state.raw}
           onChange={e => update({ raw: e.target.value })} />
       )}
@@ -467,41 +538,66 @@ const defaultForm = {
   name: '', query: '', cron: '0 8 * * *',
   recency_days: 7, max_results: 5,
   domains_allow: '', domains_block: '',
-  tags: '', output_language: 'italiano',
+  tags: '', output_language: 'italiano', custom_prompt: '',
 }
 
 function Watchlist() {
   const [items, setItems] = useState([])
   const [form, setForm] = useState(defaultForm)
+  const [editingItem, setEditingItem] = useState(null)
   const [loading, setLoading] = useState(false)
   const [running, setRunning] = useState(null)
+  const [lastRun, setLastRun] = useState(null)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
 
   const load = async () => setItems(await api('/api/watchlist') || [])
   useEffect(() => { load() }, [])
 
-  const create = async (e) => {
+  const startEdit = (item) => {
+    setEditingItem(item)
+    setForm({
+      name: item.name, query: item.query, cron: item.cron,
+      recency_days: item.recency_days, max_results: item.max_results,
+      domains_allow: item.domains_allow.join(', '),
+      domains_block: item.domains_block.join(', '),
+      tags: item.tags.join(', '),
+      output_language: item.output_language,
+      custom_prompt: item.custom_prompt || '',
+    })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const cancelEdit = () => { setEditingItem(null); setForm(defaultForm) }
+
+  const save = async (e) => {
     e.preventDefault()
-    setError(''); setSuccess(''); setLoading(true)
+    setError(''); setLoading(true)
+    const body = {
+      ...form,
+      recency_days: Number(form.recency_days),
+      max_results: Number(form.max_results),
+      domains_allow: form.domains_allow.split(',').map(s => s.trim()).filter(Boolean),
+      domains_block: form.domains_block.split(',').map(s => s.trim()).filter(Boolean),
+      tags: form.tags.split(',').map(s => s.trim()).filter(Boolean),
+      enabled: editingItem ? editingItem.enabled : true,
+      custom_prompt: form.custom_prompt || null,
+    }
     try {
-      await api('/api/watchlist/personal', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...form,
-          recency_days: Number(form.recency_days),
-          max_results: Number(form.max_results),
-          domains_allow: form.domains_allow.split(',').map(s => s.trim()).filter(Boolean),
-          domains_block: form.domains_block.split(',').map(s => s.trim()).filter(Boolean),
-          tags: form.tags.split(',').map(s => s.trim()).filter(Boolean),
-          enabled: true,
-        }),
-      })
+      if (editingItem) {
+        const path = editingItem.scope === 'global'
+          ? `/api/watchlist/global/${editingItem.id}`
+          : `/api/watchlist/personal/${editingItem.id}`
+        await api(path, { method: 'PUT', body: JSON.stringify(body) })
+        showToast(`Watchlist "${form.name}" updated.`)
+        setEditingItem(null)
+      } else {
+        await api('/api/watchlist/personal', { method: 'POST', body: JSON.stringify(body) })
+        showToast('Watchlist created successfully.')
+      }
       setForm(defaultForm)
-      setSuccess('Watchlist creata con successo.')
       load()
     } catch (err) {
-      setError(err?.message || 'Errore durante la creazione')
+      showToast(err?.message || 'Error saving watchlist', 'error')
     } finally {
       setLoading(false)
     }
@@ -509,21 +605,27 @@ function Watchlist() {
 
   const runNow = async (id) => {
     setRunning(id)
-    try { await api(`/api/watchlist/${id}/run`, { method: 'POST' }); load() }
-    catch (err) { setError(err?.message || 'Errore nel run') }
-    finally { setRunning(null) }
+    try {
+      const result = await api(`/api/watchlist/${id}/run`, { method: 'POST' })
+      setLastRun({ watchId: id, runId: result.id })
+      showToast(`Run completed! Open run #${result.id}`)
+      load()
+    } catch (err) {
+      showToast(err?.message || 'Run error', 'error')
+    } finally { setRunning(null) }
   }
 
   const deleteWatch = async (item) => {
-    if (!confirm(`Eliminare "${item.name}" e tutti i suoi run?\nL'operazione non è reversibile.`)) return
+    if (!confirm(`Delete "${item.name}" and all its runs?\nThis action cannot be undone.`)) return
     const path = item.scope === 'global'
       ? `/api/watchlist/global/${item.id}`
       : `/api/watchlist/personal/${item.id}`
     try {
       await api(path, { method: 'DELETE' })
+      showToast(`Watchlist "${item.name}" deleted.`)
       load()
     } catch (err) {
-      setError(err?.message || 'Errore eliminazione')
+      showToast(err?.message || 'Delete error', 'error')
     }
   }
 
@@ -535,7 +637,17 @@ function Watchlist() {
       })
       load()
     } catch (err) {
-      setError(err?.message || 'Errore')
+      setError(err?.message || 'Error')
+    }
+  }
+
+  const resetSeen = async (item) => {
+    if (!confirm(`Reset seen URLs for "${item.name}"?\nThe next run will reprocess all sources.`)) return
+    try {
+      await api(`/api/watchlist/${item.id}/seen-items`, { method: 'DELETE' })
+      showToast(`Seen URLs reset for "${item.name}".`)
+    } catch (err) {
+      showToast(err?.message || 'Reset error', 'error')
     }
   }
 
@@ -543,78 +655,92 @@ function Watchlist() {
     <Layout>
       <div className="page-header">
         <div className="page-title">Watchlist</div>
-        <div className="page-subtitle">Ricerche schedulate e monitoraggio continuo</div>
+        <div className="page-subtitle">Scheduled searches and continuous monitoring</div>
       </div>
 
       <div className="card">
-        <div className="card-title">Nuova watchlist personale</div>
-        <form onSubmit={create} className="form-stack">
+        <div className="card-title">{editingItem ? `Edit: ${editingItem.name}` : 'New personal watchlist'}</div>
+        <form onSubmit={save} className="form-stack">
           <div className="form-row">
             <div className="form-group">
-              <label>Nome</label>
-              <input placeholder="Es. Qdrant updates" value={form.name}
+              <label>Name <Tooltip text='Descriptive name for the watchlist. E.g. "Kubernetes updates", "Weekly AI news"' /></label>
+              <input placeholder="E.g. Qdrant updates" value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })} />
             </div>
             <div className="form-group">
-              <label>Frequenza</label>
+              <label>Frequency <Tooltip text="How often to run the search automatically. Choose hourly, daily, weekly, or a custom cron expression." /></label>
               <CronPicker value={form.cron} onChange={cron => setForm({ ...form, cron })} />
             </div>
           </div>
           <div className="form-group">
-            <label>Query</label>
-            <input placeholder="Es. qdrant release changelog" value={form.query}
+            <label>Query <Tooltip text='Search term passed to the search engine. E.g. "qdrant vector database release"' /></label>
+            <input placeholder="E.g. qdrant release changelog" value={form.query}
               onChange={e => setForm({ ...form, query: e.target.value })} />
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Recency days</label>
+              <label>Recency days <Tooltip text="Filter results to the last N days. 1 = today, 7 = week, 30 = month, 365 = year." /></label>
               <input type="number" min={1} value={form.recency_days}
                 onChange={e => setForm({ ...form, recency_days: e.target.value })} />
             </div>
             <div className="form-group">
-              <label>Max results</label>
+              <label>Max results <Tooltip text="Maximum number of sources to analyse per run (1–20). More sources = richer digest but slower execution." /></label>
               <input type="number" min={1} max={20} value={form.max_results}
                 onChange={e => setForm({ ...form, max_results: e.target.value })} />
             </div>
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Domini consentiti (virgola)</label>
+              <label>Allowed domains <Tooltip text="If set, includes ONLY results from these domains. Comma-separated. E.g. github.com, docs.python.org" /></label>
               <input placeholder="github.com, qdrant.tech" value={form.domains_allow}
                 onChange={e => setForm({ ...form, domains_allow: e.target.value })} />
             </div>
             <div className="form-group">
-              <label>Domini bloccati (virgola)</label>
+              <label>Blocked domains <Tooltip text="Always excludes results from these domains. Supports wildcards. E.g. *.spam.com, reddit.com" /></label>
               <input placeholder="spam.com" value={form.domains_block}
                 onChange={e => setForm({ ...form, domains_block: e.target.value })} />
             </div>
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label>Tag (virgola)</label>
+              <label>Tags <Tooltip text="Free-form labels to organise watchlists. E.g. tech, ai, security" /></label>
               <input placeholder="tech, ai, monitoring" value={form.tags}
                 onChange={e => setForm({ ...form, tags: e.target.value })} />
             </div>
             <div className="form-group">
-              <label>Lingua output</label>
+              <label>Output language <Tooltip text="Language the AI will use to write the digest. Does not affect the web search language." /></label>
               <select value={form.output_language}
                 onChange={e => setForm({ ...form, output_language: e.target.value })}>
                 {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
               </select>
             </div>
           </div>
-          {error  && <Alert type="error">{error}</Alert>}
-          {success && <Alert type="success">{success}</Alert>}
-          <div>
+          <div className="form-group">
+            <label>Custom prompt <Tooltip text="Alternative instruction for the AI. Replaces the default instructions; query and sources are always appended automatically." /></label>
+            <textarea rows={2} placeholder="Leave empty to use the default prompt"
+              value={form.custom_prompt}
+              onChange={e => setForm({ ...form, custom_prompt: e.target.value })} />
+          </div>
+          {error && <Alert type="error">{error}</Alert>}
+          <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-primary" disabled={loading || !form.name || !form.query}>
-              {loading ? <><Spinner /> Creazione…</> : '+ Crea watchlist'}
+              {loading ? <><Spinner /> Saving…</> : editingItem ? '💾 Save changes' : '+ Create watchlist'}
             </button>
+            {editingItem && (
+              <button type="button" className="btn btn-secondary" onClick={cancelEdit}>Cancel</button>
+            )}
           </div>
         </form>
       </div>
 
+      {lastRun && (
+        <Alert type="success">
+          Run completed. <Link to={`/runs/${lastRun.runId}`} style={{ color: 'inherit', textDecoration: 'underline' }}>Open run #{lastRun.runId} →</Link>
+        </Alert>
+      )}
+
       <div className="watch-list">
-        {items.length === 0 && <EmptyState icon="👁" text="Nessuna watchlist trovata." />}
+        {items.length === 0 && <EmptyState icon="👁" text="No watchlists found." />}
         {items.map(item => (
           <div className="watch-item" key={item.id}>
             <div className="watch-item-info">
@@ -626,20 +752,31 @@ function Watchlist() {
                 {!item.enabled && <Badge variant="inactive">disabled</Badge>}
               </div>
               <TagList tags={item.tags} />
+              <div className="watch-item-last-run">
+                {item.last_run_at ? `Last run: ${fmtDate(item.last_run_at)}` : 'Never run'}
+              </div>
             </div>
             <button
               className={`btn btn-sm ${item.enabled ? 'btn-danger' : 'btn-secondary'}`}
-              title={item.enabled ? 'Ferma schedulazione' : 'Riprendi schedulazione'}
+              title={item.enabled ? 'Stop scheduling' : 'Resume scheduling'}
               onClick={() => toggle(item)}
             >
-              {item.enabled ? '⏸ Pausa' : '▶ Riprendi'}
+              {item.enabled ? '⏸ Pause' : '▶ Resume'}
             </button>
             <button className="btn btn-secondary btn-sm"
               disabled={running === item.id} onClick={() => runNow(item.id)}>
               {running === item.id ? <Spinner /> : '▶ Run now'}
             </button>
+            <button className="btn btn-secondary btn-sm" title="Reset seen URLs"
+              onClick={() => resetSeen(item)}>
+              ↺ Reset seen
+            </button>
+            <button className="btn btn-secondary btn-sm" title="Edit watchlist"
+              onClick={() => startEdit(item)}>
+              ✏️
+            </button>
             <button className="btn btn-danger btn-sm" onClick={() => deleteWatch(item)}
-              title="Elimina watchlist">
+              title="Delete watchlist">
               🗑
             </button>
           </div>
@@ -654,6 +791,9 @@ function Watchlist() {
 function Runs() {
   const [runs, setRuns] = useState([])
   const [filter, setFilter] = useState('')
+  const [filterType, setFilterType] = useState('all')
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
   const [downloading, setDownloading] = useState(null)
   const nav = useNavigate()
 
@@ -661,9 +801,14 @@ function Runs() {
     api('/api/runs').then(data => setRuns(data || []))
   }, [])
 
-  const filtered = runs.filter(r =>
-    !filter || r.query.toLowerCase().includes(filter.toLowerCase())
-  )
+  const filtered = runs.filter(r => {
+    if (filter && !r.query.toLowerCase().includes(filter.toLowerCase())) return false
+    if (filterType === 'ask' && r.watch_id !== null) return false
+    if (filterType === 'watch' && r.watch_id === null) return false
+    if (filterFrom && new Date(r.created_at) < new Date(filterFrom)) return false
+    if (filterTo && new Date(r.created_at) > new Date(filterTo + 'T23:59:59')) return false
+    return true
+  })
 
   const handleDownload = async (r) => {
     setDownloading(r.id)
@@ -676,7 +821,7 @@ function Runs() {
   }
 
   const handleDelete = async (r) => {
-    if (!confirm(`Eliminare il run #${r.id} "${r.query}"?`)) return
+    if (!confirm(`Delete run #${r.id} "${r.query}"?`)) return
     await api(`/api/runs/${r.id}`, { method: 'DELETE' })
     setRuns(prev => prev.filter(x => x.id !== r.id))
   }
@@ -685,17 +830,24 @@ function Runs() {
     <Layout>
       <div className="page-header">
         <div className="page-title">Runs</div>
-        <div className="page-subtitle">Storico delle esecuzioni</div>
+        <div className="page-subtitle">Execution history</div>
       </div>
 
       <div className="filter-bar">
-        <input placeholder="🔍 Cerca per query…" value={filter}
+        <input placeholder="🔍 Search by query…" value={filter}
           onChange={e => setFilter(e.target.value)} />
+        <select value={filterType} onChange={e => setFilterType(e.target.value)}>
+          <option value="all">All</option>
+          <option value="ask">Ask only</option>
+          <option value="watch">Watchlist only</option>
+        </select>
+        <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} title="From date" />
+        <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} title="To date" />
       </div>
 
       <div className="runs-list">
         {filtered.length === 0 && (
-          <EmptyState icon="📋" text={filter ? 'Nessun risultato per questa ricerca.' : 'Nessun run trovato.'} />
+          <EmptyState icon="📋" text={filter ? 'No results for this search.' : 'No runs found.'} />
         )}
         {filtered.map(r => (
           <div className="run-item" key={r.id} style={{ cursor: 'pointer' }}
@@ -724,6 +876,7 @@ function Runs() {
 
 function RunDetail() {
   const { id } = useParams()
+  const nav = useNavigate()
   const [run, setRun] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -731,7 +884,7 @@ function RunDetail() {
   useEffect(() => {
     api(`/api/runs/${id}`)
       .then(setRun)
-      .catch(err => setError(err?.message || 'Errore'))
+      .catch(err => setError(err?.message || 'Error'))
       .finally(() => setLoading(false))
   }, [id])
 
@@ -750,10 +903,15 @@ function RunDetail() {
               <div className="page-title">Run #{run.id}</div>
               <div className="page-subtitle">{run.query} · {fmtDate(run.created_at)}</div>
             </div>
-            <button className="btn btn-secondary btn-sm"
-              onClick={() => downloadMd(run.digest_md, run.query)}>
-              ⬇ Scarica .md
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => nav('/runs')}>
+                ← Back to Runs
+              </button>
+              <button className="btn btn-secondary btn-sm"
+                onClick={() => downloadMd(run.digest_md, run.query)}>
+                ⬇ Download .md
+              </button>
+            </div>
           </div>
 
           <MarkdownView content={run.digest_md} />
@@ -761,7 +919,7 @@ function RunDetail() {
           {run.items && run.items.length > 0 && (
             <>
               <div className="divider" />
-              <div className="card-title" style={{ marginTop: 4 }}>Fonti ({run.items.length})</div>
+              <div className="card-title" style={{ marginTop: 4 }}>Sources ({run.items.length})</div>
               <div className="sources-list">
                 {run.items.map((item, i) => (
                   <div className="source-item" key={i}>
@@ -786,8 +944,6 @@ function AdminUsers() {
   const [users, setUsers] = useState([])
   const [form, setForm] = useState({ username: '', password: '', role: 'user' })
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
 
   let currentUserId = null
   try {
@@ -803,24 +959,37 @@ function AdminUsers() {
     setError(''); setSuccess(''); setLoading(true)
     try {
       await api('/api/admin/users', { method: 'POST', body: JSON.stringify(form) })
+      showToast(`User "${form.username}" created.`)
       setForm({ username: '', password: '', role: 'user' })
-      setSuccess(`Utente "${form.username}" creato.`)
       load()
     } catch (err) {
-      setError(err?.message || 'Errore durante la creazione')
+      showToast(err?.message || 'Error creating user', 'error')
     } finally {
       setLoading(false)
     }
   }
 
   const deleteUser = async (u) => {
-    if (!window.confirm(`Eliminare l'utente "${u.username}"?`)) return
+    if (!window.confirm(`Delete user "${u.username}"?`)) return
     try {
       await api(`/api/admin/users/${u.id}`, { method: 'DELETE' })
-      setSuccess(`Utente "${u.username}" eliminato.`)
+      showToast(`User "${u.username}" deleted.`)
       load()
     } catch (err) {
-      setError(err?.message || 'Errore durante la cancellazione')
+      showToast(err?.message || 'Error deleting user', 'error')
+    }
+  }
+
+  const toggleActive = async (u) => {
+    try {
+      await api(`/api/admin/users/${u.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_active: !u.is_active }),
+      })
+      showToast(`User "${u.username}" ${u.is_active ? 'deactivated' : 'reactivated'}.`)
+      load()
+    } catch (err) {
+      showToast(err?.message || 'Error', 'error')
     }
   }
 
@@ -828,11 +997,11 @@ function AdminUsers() {
     <Layout>
       <div className="page-header">
         <div className="page-title">Admin Users</div>
-        <div className="page-subtitle">Gestione utenti e ruoli</div>
+        <div className="page-subtitle">User and role management</div>
       </div>
 
       <div className="card">
-        <div className="card-title">Crea nuovo utente</div>
+        <div className="card-title">Create new user</div>
         <form onSubmit={create} className="form-stack">
           <div className="form-row">
             <div className="form-group">
@@ -841,7 +1010,7 @@ function AdminUsers() {
                 onChange={e => setForm({ ...form, username: e.target.value })} />
             </div>
             <div className="form-group">
-              <label>Ruolo</label>
+              <label>Role</label>
               <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
                 <option value="user">user</option>
                 <option value="admin">admin</option>
@@ -850,21 +1019,19 @@ function AdminUsers() {
           </div>
           <div className="form-group">
             <label>Password</label>
-            <input type="password" placeholder="Password iniziale" value={form.password}
+            <input type="password" placeholder="Initial password" value={form.password}
               onChange={e => setForm({ ...form, password: e.target.value })} />
           </div>
-          {error   && <Alert type="error">{error}</Alert>}
-          {success && <Alert type="success">{success}</Alert>}
           <div>
             <button className="btn btn-primary" disabled={loading || !form.username || !form.password}>
-              {loading ? <><Spinner /> Creazione…</> : '+ Crea utente'}
+              {loading ? <><Spinner /> Creating…</> : '+ Create user'}
             </button>
           </div>
         </form>
       </div>
 
       <div className="users-list">
-        {users.length === 0 && <EmptyState icon="👤" text="Nessun utente trovato." />}
+        {users.length === 0 && <EmptyState icon="👤" text="No users found." />}
         {users.map(u => (
           <div className="user-item" key={u.id}>
             <div className="user-avatar">{u.username[0].toUpperCase()}</div>
@@ -873,12 +1040,18 @@ function AdminUsers() {
               <div className="user-meta">
                 <Badge variant={u.role}>{u.role}</Badge>
                 <Badge variant={u.is_active ? 'active' : 'inactive'}>
-                  {u.is_active ? 'attivo' : 'disattivato'}
+                  {u.is_active ? 'active' : 'deactivated'}
                 </Badge>
               </div>
             </div>
             {u.id !== currentUserId && (
-              <button className="btn btn-danger btn-sm" onClick={() => deleteUser(u)}>Elimina</button>
+              <>
+                <button className={`btn btn-sm ${u.is_active ? 'btn-secondary' : 'btn-primary'}`}
+                  onClick={() => toggleActive(u)}>
+                  {u.is_active ? '⏸ Deactivate' : '▶ Reactivate'}
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={() => deleteUser(u)}>Delete</button>
+              </>
             )}
           </div>
         ))}
@@ -897,7 +1070,7 @@ function AdminStats() {
   useEffect(() => {
     api('/api/admin/stats')
       .then(setStats)
-      .catch(err => setError(err?.message || 'Errore'))
+      .catch(err => setError(err?.message || 'Error'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -906,8 +1079,8 @@ function AdminStats() {
   return (
     <Layout>
       <div className="page-header">
-        <div className="page-title">Statistiche</div>
-        <div className="page-subtitle">Overview dell'attività della piattaforma</div>
+        <div className="page-title">Statistics</div>
+        <div className="page-subtitle">Platform activity overview</div>
       </div>
 
       {loading && <div style={{ textAlign: 'center', padding: 40 }}><Spinner /></div>}
@@ -917,7 +1090,7 @@ function AdminStats() {
         <>
           <div className="stat-grid">
             <div className="stat-card">
-              <div className="stat-label">Utenti</div>
+              <div className="stat-label">Users</div>
               <div className="stat-value">{stats.total_users}</div>
             </div>
             <div className="stat-card">
@@ -925,15 +1098,15 @@ function AdminStats() {
               <div className="stat-value">{stats.total_watches}</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Run totali</div>
+              <div className="stat-label">Total runs</div>
               <div className="stat-value">{stats.total_runs}</div>
             </div>
           </div>
 
           <div className="chart-container">
-            <div className="chart-title">Run per giorno (ultimi 14 giorni)</div>
+            <div className="chart-title">Runs per day (last 14 days)</div>
             {stats.runs_per_day.length === 0 ? (
-              <EmptyState icon="📊" text="Nessun run negli ultimi 14 giorni." />
+              <EmptyState icon="📊" text="No runs in the last 14 days." />
             ) : (
               <div className="chart-bars">
                 {stats.runs_per_day.map(r => (
@@ -948,10 +1121,10 @@ function AdminStats() {
           </div>
 
           <div className="card">
-            <div className="card-title">Watchlist più attive</div>
+            <div className="card-title">Most active watchlists</div>
             <div className="top-watches-list">
               {stats.top_watches.length === 0 && (
-                <EmptyState icon="👁" text="Nessuna watchlist con run." />
+                <EmptyState icon="👁" text="No watchlists with runs." />
               )}
               {stats.top_watches.map((w, i) => (
                 <div className="top-watch-item" key={w.id}>
@@ -975,19 +1148,18 @@ function Profile() {
   const [form, setForm] = useState({ current_password: '', new_password: '', confirm: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
 
   useEffect(() => { api('/api/me').then(setMe) }, [])
 
   const submit = async (e) => {
     e.preventDefault()
-    setError(''); setSuccess('')
+    setError('')
     if (form.new_password !== form.confirm) {
-      setError('Le nuove password non coincidono.')
+      setError('New passwords do not match.')
       return
     }
     if (form.new_password.length < 6) {
-      setError('La nuova password deve essere di almeno 6 caratteri.')
+      setError('New password must be at least 6 characters.')
       return
     }
     setLoading(true)
@@ -997,9 +1169,9 @@ function Profile() {
         body: JSON.stringify({ current_password: form.current_password, new_password: form.new_password }),
       })
       setForm({ current_password: '', new_password: '', confirm: '' })
-      setSuccess('Password aggiornata con successo.')
+      showToast('Password updated successfully.')
     } catch (err) {
-      setError(err?.message || 'Errore durante l\'aggiornamento')
+      setError(err?.message || 'Error updating password')
     } finally {
       setLoading(false)
     }
@@ -1008,8 +1180,8 @@ function Profile() {
   return (
     <Layout>
       <div className="page-header">
-        <div className="page-title">Profilo</div>
-        <div className="page-subtitle">Impostazioni account</div>
+        <div className="page-title">Profile</div>
+        <div className="page-subtitle">Account settings</div>
       </div>
 
       {me && (
@@ -1025,29 +1197,28 @@ function Profile() {
       )}
 
       <div className="card">
-        <div className="card-title">Cambia password</div>
+        <div className="card-title">Change password</div>
         <form onSubmit={submit} className="form-stack">
           <div className="form-group">
-            <label>Password corrente</label>
+            <label>Current password</label>
             <input type="password" placeholder="••••••••" value={form.current_password}
               onChange={e => setForm({ ...form, current_password: e.target.value })} />
           </div>
           <div className="form-group">
-            <label>Nuova password</label>
-            <input type="password" placeholder="Min. 6 caratteri" value={form.new_password}
+            <label>New password</label>
+            <input type="password" placeholder="Min. 6 characters" value={form.new_password}
               onChange={e => setForm({ ...form, new_password: e.target.value })} />
           </div>
           <div className="form-group">
-            <label>Conferma nuova password</label>
-            <input type="password" placeholder="Ripeti la nuova password" value={form.confirm}
+            <label>Confirm new password</label>
+            <input type="password" placeholder="Repeat new password" value={form.confirm}
               onChange={e => setForm({ ...form, confirm: e.target.value })} />
           </div>
-          {error   && <Alert type="error">{error}</Alert>}
-          {success && <Alert type="success">{success}</Alert>}
+          {error && <Alert type="error">{error}</Alert>}
           <div>
             <button className="btn btn-primary"
               disabled={loading || !form.current_password || !form.new_password || !form.confirm}>
-              {loading ? <><Spinner /> Aggiornamento…</> : 'Aggiorna password'}
+              {loading ? <><Spinner /> Updating…</> : 'Update password'}
             </button>
           </div>
         </form>

@@ -31,6 +31,7 @@ class Watchlist(Base):
     domains_block: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     tags: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     output_language: Mapped[str] = mapped_column(String(50), nullable=False, default="italiano")
+    custom_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 

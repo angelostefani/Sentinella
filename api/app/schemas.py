@@ -49,6 +49,7 @@ class AskIn(BaseModel):
     domains_allow: list[str] = []
     domains_block: list[str] = []
     output_language: str = "italiano"
+    custom_prompt: str | None = None
 
 
 class WatchToggleIn(BaseModel):
@@ -66,6 +67,7 @@ class WatchIn(BaseModel):
     domains_block: list[str] = []
     tags: list[str] = []
     output_language: str = "italiano"
+    custom_prompt: str | None = None
 
 
 class WatchOut(BaseModel):
@@ -82,7 +84,9 @@ class WatchOut(BaseModel):
     domains_block: list[str]
     tags: list[str]
     output_language: str
+    custom_prompt: str | None
     created_at: datetime
+    last_run_at: datetime | None = None
 
 
 class RunSummaryOut(BaseModel):

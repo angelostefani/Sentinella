@@ -27,6 +27,7 @@ class Watchlist(Base):
     domains_allow: Mapped[list] = mapped_column(JSONB, nullable=False)
     domains_block: Mapped[list] = mapped_column(JSONB, nullable=False)
     output_language: Mapped[str] = mapped_column(String(50), nullable=False, default="italiano")
+    custom_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Run(Base):

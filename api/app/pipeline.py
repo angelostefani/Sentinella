@@ -38,13 +38,16 @@ def fetch_extract(url: str) -> str:
     return text[: settings.max_text_chars_per_source]
 
 
-def digest_markdown(query: str, items: list[dict], language: str = "italiano") -> str:
+def digest_markdown(query: str, items: list[dict], language: str = "italiano", custom_prompt: str | None = None) -> str:
     src_lines = []
     for idx, item in enumerate(items, 1):
         src_lines.append(f"[{idx}] {item['title']} - {item['url']}\\n{item.get('content','')}")
-    prompt = (
+    instruction = custom_prompt if custom_prompt else (
         f"Scrivi in {language} usando SOLO le fonti fornite. Output markdown con titolo, "
-        "5-10 bullet Novita/Takeaways con citazioni [n], opzionale Cosa tenere d'occhio, sezione Fonti.\\n\\n"
+        "5-10 bullet Novita/Takeaways con citazioni [n], opzionale Cosa tenere d'occhio, sezione Fonti."
+    )
+    prompt = (
+        f"{instruction}\\n\\n"
         f"Query: {query}\\n\\nFonti:\\n" + "\\n\\n".join(src_lines)
     )
     payload = {

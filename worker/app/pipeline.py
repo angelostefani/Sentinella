@@ -32,7 +32,7 @@ def domain_from_url(url: str) -> str:
 def match_pattern(domain: str, pattern: str) -> bool:
     pattern = normalize_domain(pattern)
     if pattern.startswith("*."):
-        return fnmatch.fnmatch(domain, pattern)
+        return fnmatch.fnmatch(domain, pattern) or domain.endswith(pattern[1:])
     return domain == pattern
 
 
@@ -43,6 +43,15 @@ def allowed_url(url: str, allow: list[str], block: list[str]) -> bool:
     if allow:
         return any(match_pattern(domain, p) for p in allow)
     return True
+
+
+def fetch_extract(url: str) -> str:
+    with httpx.Client(timeout=settings.fetch_timeout_s, follow_redirects=True) as client:
+        fr = client.get(url)
+        fr.raise_for_status()
+        raw = fr.content[: settings.max_fetch_bytes]
+    extracted = trafilatura.extract(raw.decode("utf-8", errors="ignore"), include_comments=False, include_tables=False) or ""
+    return extracted[: settings.max_text_chars_per_source]
 
 
 def search_web(query: str, recency_days: int, max_results: int, domains_allow: list[str], domains_block: list[str]) -> list[dict]:
@@ -63,29 +72,22 @@ def search_web(query: str, recency_days: int, max_results: int, domains_allow: l
         if not url or not allowed_url(url, domains_allow, domains_block):
             continue
         snippet = (item.get("content") or "")[: settings.max_text_chars_per_source]
-        content = snippet
-        try:
-            with httpx.Client(timeout=settings.fetch_timeout_s, follow_redirects=True) as client:
-                fr = client.get(url)
-                fr.raise_for_status()
-                raw = fr.content[: settings.max_fetch_bytes]
-            extracted = trafilatura.extract(raw.decode("utf-8", errors="ignore"), include_comments=False, include_tables=False) or ""
-            content = (extracted or snippet)[: settings.max_text_chars_per_source]
-        except Exception:
-            pass  # content stays as snippet
-        out.append({"title": item.get("title", "(senza titolo)"), "url": url, "content": content})
+        out.append({"title": item.get("title", "(senza titolo)"), "url": url, "content": "", "snippet": snippet})
         if len(out) >= max_results:
             break
     return out
 
 
-def digest_markdown(query: str, items: list[dict], language: str = "italiano") -> str:
+def digest_markdown(query: str, items: list[dict], language: str = "italiano", custom_prompt: str | None = None) -> str:
     sources = []
     for i, item in enumerate(items, 1):
         sources.append(f"[{i}] {item['title']} - {item['url']}\\n{item.get('content','')}")
-    prompt = (
+    instruction = custom_prompt if custom_prompt else (
         f"Scrivi in {language} usando SOLO le fonti fornite. Output markdown con titolo, 5-10 bullet Novita/Takeaways "
-        "con citazioni [n], opzionale Cosa tenere d'occhio, sezione Fonti.\\n\\n"
+        "con citazioni [n], opzionale Cosa tenere d'occhio, sezione Fonti."
+    )
+    prompt = (
+        f"{instruction}\\n\\n"
         f"Query: {query}\\n\\nFonti:\\n" + "\\n\\n".join(sources)
     )
     payload = {"model": settings.ollama_model, "prompt": prompt, "stream": False}
