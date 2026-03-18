@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(docker compose:*)",
-      "Bash(curl -s http://192.168.153.248:11434/api/tags)",
-      "Bash(docker run:*)"
-    ]
-  }
-}
