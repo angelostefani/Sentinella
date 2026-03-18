@@ -166,6 +166,18 @@ def update_user(user_id: int, payload: UserUpdateIn, _: User = Depends(require_a
     return user
 
 
+@app.delete("/api/admin/users/{user_id}")
+def delete_user(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    if user_id == admin.id:
+        raise HTTPException(status_code=400, detail="cannot delete yourself")
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="not found")
+    db.delete(user)
+    db.commit()
+    return {"ok": True}
+
+
 # ─── Admin stats ─────────────────────────────────────────────────────────────
 
 @app.get("/api/admin/stats", response_model=StatsOut)

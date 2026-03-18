@@ -789,6 +789,12 @@ function AdminUsers() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  let currentUserId = null
+  try {
+    const token = localStorage.getItem('token')
+    if (token) currentUserId = parseInt(JSON.parse(atob(token.split('.')[1])).sub)
+  } catch { /* ignore */ }
+
   const load = async () => setUsers(await api('/api/admin/users') || [])
   useEffect(() => { load() }, [])
 
@@ -804,6 +810,17 @@ function AdminUsers() {
       setError(err?.message || 'Errore durante la creazione')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const deleteUser = async (u) => {
+    if (!window.confirm(`Eliminare l'utente "${u.username}"?`)) return
+    try {
+      await api(`/api/admin/users/${u.id}`, { method: 'DELETE' })
+      setSuccess(`Utente "${u.username}" eliminato.`)
+      load()
+    } catch (err) {
+      setError(err?.message || 'Errore durante la cancellazione')
     }
   }
 
@@ -860,6 +877,9 @@ function AdminUsers() {
                 </Badge>
               </div>
             </div>
+            {u.id !== currentUserId && (
+              <button className="btn btn-danger btn-sm" onClick={() => deleteUser(u)}>Elimina</button>
+            )}
           </div>
         ))}
       </div>

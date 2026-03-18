@@ -1,0 +1,90 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="160" y1="64" x2="1140" y2="576" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#06131A"/>
+      <stop offset="0.5" stop-color="#0B2230"/>
+      <stop offset="1" stop-color="#123B56"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="248" y1="182" x2="1027" y2="458" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5EEAD4" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#60A5FA" stop-opacity="0.14"/>
+    </linearGradient>
+    <linearGradient id="sweep" x1="258" y1="505" x2="736" y2="170" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5EEAD4" stop-opacity="0"/>
+      <stop offset="1" stop-color="#5EEAD4" stop-opacity="0.52"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="1280" height="640" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="24" flood-color="#020617" flood-opacity="0.35"/>
+    </filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" rx="32" fill="url(#bg)"/>
+  <rect x="24" y="24" width="1232" height="592" rx="24" stroke="#FFFFFF" stroke-opacity="0.08"/>
+
+  <circle cx="202" cy="102" r="116" fill="#5EEAD4" fill-opacity="0.08" filter="url(#soft)"/>
+  <circle cx="1095" cy="112" r="136" fill="#60A5FA" fill-opacity="0.08" filter="url(#soft)"/>
+  <circle cx="1037" cy="528" r="156" fill="#22C55E" fill-opacity="0.05" filter="url(#soft)"/>
+
+  <path d="M0 476C144 417 287 388 444 388C671 388 808 457 1023 457C1115 457 1198 445 1280 419V640H0V476Z" fill="url(#glow)"/>
+
+  <g opacity="0.28">
+    <path d="M222 505C222 392.886 312.886 302 425 302C537.114 302 628 392.886 628 505" stroke="#B6FFF1" stroke-width="2"/>
+    <path d="M270 505C270 419.395 339.395 350 425 350C510.605 350 580 419.395 580 505" stroke="#B6FFF1" stroke-width="2"/>
+    <path d="M316 505C316 445.353 365.353 396 425 396C484.647 396 534 445.353 534 505" stroke="#B6FFF1" stroke-width="2"/>
+  </g>
+
+  <path d="M425 505L736 179L596 505H425Z" fill="url(#sweep)" fill-opacity="0.9"/>
+
+  <g filter="url(#shadow)">
+    <rect x="761" y="144" width="336" height="210" rx="22" fill="#08141E" fill-opacity="0.92"/>
+    <rect x="761" y="144" width="336" height="210" rx="22" stroke="#8FD9FF" stroke-opacity="0.16"/>
+    <rect x="786" y="172" width="132" height="26" rx="13" fill="#0F2735"/>
+    <text x="802" y="189" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700">WEB INTELLIGENCE</text>
+    <rect x="786" y="220" width="286" height="18" rx="9" fill="#123244"/>
+    <rect x="786" y="250" width="234" height="12" rx="6" fill="#0E5160"/>
+    <rect x="786" y="274" width="270" height="12" rx="6" fill="#0E5160"/>
+    <rect x="786" y="298" width="190" height="12" rx="6" fill="#0E5160"/>
+    <circle cx="1039" cy="185" r="28" fill="#0B2230"/>
+    <path d="M1030 176H1047M1030 185H1047M1030 194H1042" stroke="#5EEAD4" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="877" y="390" width="220" height="118" rx="22" fill="#071A24" fill-opacity="0.92"/>
+    <rect x="877" y="390" width="220" height="118" rx="22" stroke="#86EFAC" stroke-opacity="0.18"/>
+    <rect x="904" y="418" width="85" height="24" rx="12" fill="#103124"/>
+    <text x="919" y="434" fill="#86EFAC" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="700">WATCHLIST</text>
+    <path d="M904 468H1064" stroke="#1B4D38" stroke-width="10" stroke-linecap="round"/>
+    <path d="M904 468H1018" stroke="#86EFAC" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="1018" cy="468" r="9" fill="#DCFCE7"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="148" y="110" width="206" height="88" rx="20" fill="#071A24" fill-opacity="0.88"/>
+    <rect x="148" y="110" width="206" height="88" rx="20" stroke="#93C5FD" stroke-opacity="0.16"/>
+    <text x="174" y="146" fill="#E2F3FF" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700">Local AI Digest</text>
+    <text x="174" y="171" fill="#8FBAD0" font-family="Segoe UI, Arial, sans-serif" font-size="14">Search, extract, summarize.</text>
+  </g>
+
+  <g>
+    <circle cx="425" cy="505" r="12" fill="#CFFAFE"/>
+    <circle cx="552" cy="378" r="7" fill="#5EEAD4"/>
+    <circle cx="636" cy="294" r="7" fill="#5EEAD4"/>
+    <circle cx="714" cy="216" r="9" fill="#CFFAFE"/>
+    <circle cx="502" cy="430" r="5" fill="#99F6E4"/>
+    <circle cx="347" cy="447" r="6" fill="#99F6E4"/>
+  </g>
+
+  <g>
+    <path d="M396 525H454L444 438H406L396 525Z" fill="#DCFCE7"/>
+    <path d="M381 542H469" stroke="#DCFCE7" stroke-width="10" stroke-linecap="round"/>
+    <path d="M404 438H446L437 387H413L404 438Z" fill="#86EFAC"/>
+    <circle cx="425" cy="377" r="24" fill="#ECFDF5"/>
+    <path d="M414 377L422 385L438 368" stroke="#0F766E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <text x="760" y="494" fill="#F8FAFC" font-family="Segoe UI, Arial, sans-serif" font-size="64" font-weight="800">Sentinella</text>
+  <text x="761" y="536" fill="#B8D6E8" font-family="Segoe UI, Arial, sans-serif" font-size="26" font-weight="500">Self-hosted web monitoring with local AI digests</text>
+</svg>
