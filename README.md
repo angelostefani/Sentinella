@@ -1,7 +1,7 @@
 # Sentinella
 
 <p align="center">
-  <img src="docs/assets/sentinella-banner.svg" alt="Sentinella banner" width="100%" />
+  <img src="docs/assets/sentinella-banner.png" alt="Sentinella banner" width="100%" />
 </p>
 
 <p align="center">
