@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Annotated
 from pydantic import BaseModel, Field
 
 
@@ -27,6 +28,8 @@ class UserCreateIn(BaseModel):
 class UserUpdateIn(BaseModel):
     is_active: bool | None = None
     password: str | None = None
+    max_watches: Annotated[int, Field(ge=1)] | None = None
+    max_daily_runs: Annotated[int, Field(ge=1)] | None = None
 
 
 class PasswordChangeIn(BaseModel):
@@ -39,6 +42,8 @@ class UserOut(BaseModel):
     username: str
     role: str
     is_active: bool
+    max_watches: Annotated[int, Field(ge=1)] | None = None
+    max_daily_runs: Annotated[int, Field(ge=1)] | None = None
     created_at: datetime
 
 
@@ -129,3 +134,17 @@ class StatsOut(BaseModel):
 class ServiceStatusOut(BaseModel):
     searxng: str
     ollama: str
+
+
+class PreviewIn(BaseModel):
+    query: str
+    recency_days: int = 7
+    max_results: int = 5
+    domains_allow: list[str] = []
+    domains_block: list[str] = []
+
+
+class PreviewItemOut(BaseModel):
+    title: str
+    url: str
+    snippet: str

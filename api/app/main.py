@@ -1,12 +1,15 @@
+import io
 import os
 import time
 import uuid
+import zipfile
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
@@ -18,8 +21,8 @@ from .models import Run, SeenItem, User, Watchlist
 from .pipeline import digest_markdown, fetch_extract, hash_url, search_web
 from .rate_limit import InMemoryRateLimiter
 from .schemas import (
-    AskIn, LoginIn, MeOut, PasswordChangeIn, RunOut, RunSummaryOut,
-    ServiceStatusOut, StatsOut, TokenOut,
+    AskIn, LoginIn, MeOut, PasswordChangeIn, PreviewIn, PreviewItemOut,
+    RunOut, RunSummaryOut, ServiceStatusOut, StatsOut, TokenOut,
     UserCreateIn, UserOut, UserUpdateIn, WatchIn, WatchOut, WatchToggleIn,
 )
 from .security import create_token, hash_password, verify_password
@@ -76,6 +79,8 @@ def startup():
         db.execute(text("ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'"))
         db.execute(text("ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS output_language VARCHAR(50) DEFAULT 'italiano'"))
         db.execute(text("ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS custom_prompt TEXT"))
+        db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS max_watches INTEGER"))
+        db.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS max_daily_runs INTEGER"))
         db.commit()
     with Session(engine) as db:
         first_user = db.scalar(select(User).limit(1))
@@ -162,6 +167,10 @@ def update_user(user_id: int, payload: UserUpdateIn, _: User = Depends(require_a
         user.is_active = payload.is_active
     if payload.password:
         user.password_hash = hash_password(payload.password)
+    if "max_watches" in payload.model_fields_set:
+        user.max_watches = payload.max_watches
+    if "max_daily_runs" in payload.model_fields_set:
+        user.max_daily_runs = payload.max_daily_runs
     db.commit()
     db.refresh(user)
     return user
@@ -212,6 +221,24 @@ def get_stats(_: User = Depends(require_admin), db: Session = Depends(get_db)):
         runs_per_day=runs_per_day,
         top_watches=top_watches,
     )
+
+
+# ─── Helpers ─────────────────────────────────────────────────────────────────
+
+def count_today_runs(db: Session, user_id: int) -> int:
+    tz = ZoneInfo(settings.tz)
+    now_local = datetime.now(tz=tz)
+    day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+    day_start_utc = day_start.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+    day_end_utc = day_end.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+    return db.scalar(
+        select(func.count()).select_from(Run).where(
+            Run.user_id == user_id,
+            Run.created_at >= day_start_utc,
+            Run.created_at < day_end_utc,
+        )
+    ) or 0
 
 
 # ─── Ask ─────────────────────────────────────────────────────────────────────
@@ -317,6 +344,10 @@ def upsert_watch(scope: str, watch_id: int | None, payload: WatchIn, user: User,
 
 @app.post("/api/watchlist/personal", response_model=WatchOut)
 def create_personal_watch(payload: WatchIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user.max_watches is not None:
+        count = db.scalar(select(func.count()).select_from(Watchlist).where(Watchlist.owner_user_id == user.id))
+        if count >= user.max_watches:
+            raise HTTPException(status_code=400, detail=f"quota superata: max {user.max_watches} watchlist personali")
     return upsert_watch("personal", None, payload, user, db)
 
 
@@ -389,6 +420,11 @@ def run_watch_now(watch_id: int, user: User = Depends(get_current_user), db: Ses
         if watch.owner_user_id != user.id:
             raise HTTPException(status_code=403, detail="forbidden")
     run_user_id = None if watch.scope == "global" else watch.owner_user_id
+    if run_user_id is not None:
+        owner = db.get(User, run_user_id)
+        if owner and owner.max_daily_runs is not None:
+            if count_today_runs(db, run_user_id) >= owner.max_daily_runs:
+                raise HTTPException(status_code=429, detail=f"quota giornaliera superata: max {owner.max_daily_runs} run/giorno")
     return run_query(
         db, watch.query, watch.recency_days, watch.max_results,
         watch.domains_allow, watch.domains_block,
@@ -439,3 +475,40 @@ def delete_run(run_id: int, user: User = Depends(get_current_user), db: Session 
     db.delete(run)
     db.commit()
     return {"ok": True}
+
+
+# ─── Export batch ─────────────────────────────────────────────────────────────
+
+@app.get("/api/watchlist/{watch_id}/export")
+def export_watch_runs(watch_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    watch = db.get(Watchlist, watch_id)
+    if not watch:
+        raise HTTPException(status_code=404, detail="not found")
+    if watch.scope == "global" and user.role != "admin":
+        raise HTTPException(status_code=403, detail="forbidden")
+    if watch.scope == "personal" and watch.owner_user_id != user.id and user.role != "admin":
+        raise HTTPException(status_code=403, detail="forbidden")
+    runs = list(db.scalars(select(Run).where(Run.watch_id == watch_id).order_by(Run.id.desc())).all())
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for run in runs:
+            date_str = run.created_at.strftime("%Y%m%d-%H%M")
+            filename = f"run-{run.id}-{date_str}.md"
+            zf.writestr(filename, run.digest_md or "")
+    buf.seek(0)
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in watch.name)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="sentinella-{safe_name}-export.zip"'},
+    )
+
+
+# ─── Search preview ───────────────────────────────────────────────────────────
+
+@app.post("/api/search/preview", response_model=list[PreviewItemOut])
+def search_preview(payload: PreviewIn, user: User = Depends(get_current_user)):
+    if not limiter.allow(f"preview:{user.id}"):
+        raise HTTPException(status_code=429, detail="rate limit exceeded")
+    items = search_web(payload.query, payload.recency_days, payload.max_results, payload.domains_allow, payload.domains_block)
+    return [PreviewItemOut(title=i["title"], url=i["url"], snippet=i.get("snippet") or i.get("content") or "") for i in items]

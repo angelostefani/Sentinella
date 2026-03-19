@@ -23,6 +23,19 @@
   color: var(--text);
 }
 
+/* ─── Light theme ───────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:          #f0f2f8;
+  --surface:     #ffffff;
+  --surface-2:   #f5f7fc;
+  --border:      #dde1ee;
+  --text:        #1e2130;
+  --text-muted:  #5a6080;
+  --text-dim:    #9ba3bf;
+  --shadow:      0 4px 24px rgba(0,0,0,.08);
+  --shadow-sm:   0 2px 8px rgba(0,0,0,.06);
+}
+
 /* ─── Reset ─────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); min-height: 100vh; }
@@ -311,6 +324,92 @@ textarea {
   border-radius: var(--radius-sm);
   padding: 4px 8px;
   white-space: nowrap;
+}
+
+/* ─── Preview panel ──────────────────────────────────────────────── */
+.preview-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.preview-panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.preview-panel-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 0 4px;
+}
+.preview-empty {
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+  padding: 8px 0;
+}
+.preview-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.preview-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+}
+.preview-item-title:hover { text-decoration: underline; }
+.preview-item-url {
+  font-size: 11px;
+  color: var(--text-dim);
+  word-break: break-all;
+}
+.preview-item-snippet {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ─── Quota UI ────────────────────────────────────────────────────── */
+.user-quota {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: auto;
+}
+.user-quota span {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 7px;
+}
+.quota-edit-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.quota-edit-form input {
+  width: 110px;
+  padding: 6px 8px;
+  font-size: 13px;
 }
 
 /* ─── Buttons ────────────────────────────────────────────────────── */

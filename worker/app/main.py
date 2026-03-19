@@ -1,18 +1,19 @@
 import os
 import random
 import time
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.exc import ProgrammingError
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .logging_utils import get_logger
-from .models import Run, Watchlist
+from .models import Run, User, Watchlist
 from .pipeline import digest_markdown, fetch_extract, hash_url, search_web
 
 logger = get_logger()
@@ -27,6 +28,25 @@ def run_watch(watch_id: int):
             watch = db.get(Watchlist, watch_id)
             if not watch or not watch.enabled:
                 return
+            if watch.scope == "personal" and watch.owner_user_id:
+                owner = db.get(User, watch.owner_user_id)
+                if owner and owner.max_daily_runs is not None:
+                    tz = ZoneInfo(settings.tz)
+                    now_local = datetime.now(tz=tz)
+                    day_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+                    day_end = day_start + timedelta(days=1)
+                    day_start_utc = day_start.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+                    day_end_utc = day_end.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+                    daily_count = db.scalar(
+                        select(func.count()).select_from(Run).where(
+                            Run.user_id == owner.id,
+                            Run.created_at >= day_start_utc,
+                            Run.created_at < day_end_utc,
+                        )
+                    ) or 0
+                    if daily_count >= owner.max_daily_runs:
+                        logger.warning(f"quota skip watch={watch.id} user={owner.id} daily={daily_count}/{owner.max_daily_runs}")
+                        return
             items = search_web(watch.query, watch.recency_days, watch.max_results, watch.domains_allow, watch.domains_block)
             for item in items:
                 try:
@@ -34,8 +54,14 @@ def run_watch(watch_id: int):
                     item["content"] = fetched or item.pop("snippet", "")
                 except Exception:
                     item["content"] = item.pop("snippet", "")
+            prev_run = db.scalar(
+                select(Run).where(Run.watch_id == watch.id)
+                .order_by(Run.id.desc()).limit(1)
+            )
+            previous_digest = prev_run.digest_md if prev_run and prev_run.digest_md else None
+
             try:
-                digest = digest_markdown(watch.query, items, language=getattr(watch, "output_language", "italiano"), custom_prompt=getattr(watch, "custom_prompt", None))
+                digest = digest_markdown(watch.query, items, language=getattr(watch, "output_language", "italiano"), custom_prompt=getattr(watch, "custom_prompt", None), previous_digest=previous_digest)
             except Exception as exc:
                 digest = ""
                 logger.error(f"digest failed watch={watch.id}", extra={"error": str(exc)})

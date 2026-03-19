@@ -78,7 +78,7 @@ def search_web(query: str, recency_days: int, max_results: int, domains_allow: l
     return out
 
 
-def digest_markdown(query: str, items: list[dict], language: str = "italiano", custom_prompt: str | None = None) -> str:
+def digest_markdown(query: str, items: list[dict], language: str = "italiano", custom_prompt: str | None = None, previous_digest: str | None = None) -> str:
     sources = []
     for i, item in enumerate(items, 1):
         sources.append(f"[{i}] {item['title']} - {item['url']}\\n{item.get('content','')}")
@@ -86,8 +86,16 @@ def digest_markdown(query: str, items: list[dict], language: str = "italiano", c
         f"Scrivi in {language} usando SOLO le fonti fornite. Output markdown con titolo, 5-10 bullet Novita/Takeaways "
         "con citazioni [n], opzionale Cosa tenere d'occhio, sezione Fonti."
     )
+    comparison_section = ""
+    if previous_digest:
+        comparison_section = (
+            f"\\n\\nDigest precedente (per confronto — non citare come fonte):\\n"
+            f"{previous_digest[:3000]}\\n\\n"
+            f"Evidenzia esplicitamente cosa è NUOVO rispetto al digest precedente. "
+            f"Se non ci sono novità significative, indicalo chiaramente."
+        )
     prompt = (
-        f"{instruction}\\n\\n"
+        f"{instruction}{comparison_section}\\n\\n"
         f"Query: {query}\\n\\nFonti:\\n" + "\\n\\n".join(sources)
     )
     payload = {"model": settings.ollama_model, "prompt": prompt, "stream": False}

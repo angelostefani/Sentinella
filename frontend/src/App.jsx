@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate, useLocation, useParams } from 'react-router-dom'
 
 // ─── API helper ──────────────────────────────────────────────────────────────
@@ -203,6 +203,12 @@ function HealthDots() {
 function Layout({ children }) {
   const location = useLocation()
   const nav = useNavigate()
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
+
+  useEffect(() => {
+    document.body.setAttribute('data-theme', theme)
+    localStorage.setItem('theme', theme)
+  }, [theme])
 
   // Detect admin from JWT (decode payload without verification — UI only)
   let isAdmin = false
@@ -263,6 +269,9 @@ function Layout({ children }) {
           >
             <span>⚙</span> Profile
           </Link>
+          <button className="btn-logout" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}>
+            <span>{theme === 'dark' ? '☀' : '🌙'}</span> {theme === 'dark' ? 'Light' : 'Dark'}
+          </button>
           <button className="btn-logout" onClick={logout}>
             <span>⏻</span> Logout
           </button>
@@ -549,6 +558,14 @@ function Watchlist() {
   const [running, setRunning] = useState(null)
   const [lastRun, setLastRun] = useState(null)
   const [error, setError] = useState('')
+  const [previewResults, setPreviewResults] = useState(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [exporting, setExporting] = useState(null)
+
+  const isAdmin = useMemo(() => {
+    try { return JSON.parse(atob(localStorage.getItem('token').split('.')[1])).role === 'admin' }
+    catch { return false }
+  }, [])
 
   const load = async () => setItems(await api('/api/watchlist') || [])
   useEffect(() => { load() }, [])
@@ -651,6 +668,45 @@ function Watchlist() {
     }
   }
 
+  const testQuery = async () => {
+    setPreviewLoading(true); setPreviewResults(null)
+    try {
+      const results = await api('/api/search/preview', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: form.query,
+          recency_days: Number(form.recency_days),
+          max_results: Number(form.max_results),
+          domains_allow: form.domains_allow.split(',').map(s => s.trim()).filter(Boolean),
+          domains_block: form.domains_block.split(',').map(s => s.trim()).filter(Boolean),
+        }),
+      })
+      setPreviewResults(results)
+    } catch (err) {
+      showToast(err?.message || 'Preview error', 'error')
+    } finally { setPreviewLoading(false) }
+  }
+
+  const exportWatch = async (item) => {
+    setExporting(item.id)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/watchlist/${item.id}/export`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `sentinella-${item.name.toLowerCase().replace(/\s+/g, '-')}-export.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      showToast(err?.message || 'Export error', 'error')
+    } finally { setExporting(null) }
+  }
+
   return (
     <Layout>
       <div className="page-header">
@@ -722,14 +778,38 @@ function Watchlist() {
               onChange={e => setForm({ ...form, custom_prompt: e.target.value })} />
           </div>
           {error && <Alert type="error">{error}</Alert>}
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" disabled={loading || !form.name || !form.query}>
               {loading ? <><Spinner /> Saving…</> : editingItem ? '💾 Save changes' : '+ Create watchlist'}
             </button>
+            {form.query && (
+              <button type="button" className="btn btn-secondary" disabled={previewLoading}
+                onClick={testQuery}>
+                {previewLoading ? <><Spinner /> Testing…</> : '🔍 Test query'}
+              </button>
+            )}
             {editingItem && (
               <button type="button" className="btn btn-secondary" onClick={cancelEdit}>Cancel</button>
             )}
           </div>
+          {previewResults !== null && (
+            <div className="preview-panel">
+              <div className="preview-panel-title">
+                Preview — {previewResults.length} result{previewResults.length !== 1 ? 's' : ''}
+                <button className="preview-panel-close" onClick={() => setPreviewResults(null)}>✕</button>
+              </div>
+              {previewResults.length === 0
+                ? <div className="preview-empty">No results found. Try changing the query or recency days.</div>
+                : previewResults.map((r, i) => (
+                  <div className="preview-item" key={i}>
+                    <a href={r.url} target="_blank" rel="noreferrer" className="preview-item-title">{r.title}</a>
+                    <div className="preview-item-url">{r.url}</div>
+                    {r.snippet && <div className="preview-item-snippet">{r.snippet.slice(0, 200)}{r.snippet.length > 200 ? '…' : ''}</div>}
+                  </div>
+                ))
+              }
+            </div>
+          )}
         </form>
       </div>
 
@@ -741,12 +821,15 @@ function Watchlist() {
 
       <div className="watch-list">
         {items.length === 0 && <EmptyState icon="👁" text="No watchlists found." />}
-        {items.map(item => (
+        {items.map(item => {
+          const canEdit = isAdmin || item.scope === 'personal'
+          return (
           <div className="watch-item" key={item.id}>
             <div className="watch-item-info">
               <div className="watch-item-name">{item.name}</div>
               <div className="watch-item-meta">
                 <Badge variant={item.scope}>{item.scope}</Badge>
+                {!canEdit && <Badge variant="inactive">read-only</Badge>}
                 <span className="watch-item-cron">{item.cron}</span>
                 <Badge variant="user">{item.output_language}</Badge>
                 {!item.enabled && <Badge variant="inactive">disabled</Badge>}
@@ -756,31 +839,48 @@ function Watchlist() {
                 {item.last_run_at ? `Last run: ${fmtDate(item.last_run_at)}` : 'Never run'}
               </div>
             </div>
-            <button
-              className={`btn btn-sm ${item.enabled ? 'btn-danger' : 'btn-secondary'}`}
-              title={item.enabled ? 'Stop scheduling' : 'Resume scheduling'}
-              onClick={() => toggle(item)}
-            >
-              {item.enabled ? '⏸ Pause' : '▶ Resume'}
-            </button>
-            <button className="btn btn-secondary btn-sm"
-              disabled={running === item.id} onClick={() => runNow(item.id)}>
-              {running === item.id ? <Spinner /> : '▶ Run now'}
-            </button>
-            <button className="btn btn-secondary btn-sm" title="Reset seen URLs"
-              onClick={() => resetSeen(item)}>
-              ↺ Reset seen
-            </button>
-            <button className="btn btn-secondary btn-sm" title="Edit watchlist"
-              onClick={() => startEdit(item)}>
-              ✏️
-            </button>
-            <button className="btn btn-danger btn-sm" onClick={() => deleteWatch(item)}
-              title="Delete watchlist">
-              🗑
-            </button>
+            {canEdit && (
+              <button
+                className={`btn btn-sm ${item.enabled ? 'btn-danger' : 'btn-secondary'}`}
+                title={item.enabled ? 'Stop scheduling' : 'Resume scheduling'}
+                onClick={() => toggle(item)}
+              >
+                {item.enabled ? '⏸ Pause' : '▶ Resume'}
+              </button>
+            )}
+            {canEdit && (
+              <button className="btn btn-secondary btn-sm"
+                disabled={running === item.id} onClick={() => runNow(item.id)}>
+                {running === item.id ? <Spinner /> : '▶ Run now'}
+              </button>
+            )}
+            {canEdit && (
+              <button className="btn btn-secondary btn-sm" title="Reset seen URLs"
+                onClick={() => resetSeen(item)}>
+                ↺ Reset seen
+              </button>
+            )}
+            {canEdit && (
+              <button className="btn btn-secondary btn-sm" title="Export all runs as zip"
+                disabled={exporting === item.id} onClick={() => exportWatch(item)}>
+                {exporting === item.id ? <Spinner /> : '⬇ Export'}
+              </button>
+            )}
+            {canEdit && (
+              <button className="btn btn-secondary btn-sm" title="Edit watchlist"
+                onClick={() => startEdit(item)}>
+                ✏️
+              </button>
+            )}
+            {canEdit && (
+              <button className="btn btn-danger btn-sm" onClick={() => deleteWatch(item)}
+                title="Delete watchlist">
+                🗑
+              </button>
+            )}
           </div>
-        ))}
+          )
+        })}
       </div>
     </Layout>
   )
@@ -944,6 +1044,7 @@ function AdminUsers() {
   const [users, setUsers] = useState([])
   const [form, setForm] = useState({ username: '', password: '', role: 'user' })
   const [loading, setLoading] = useState(false)
+  const [quotaEditing, setQuotaEditing] = useState(null) // { id, max_watches, max_daily_runs }
 
   let currentUserId = null
   try {
@@ -953,6 +1054,24 @@ function AdminUsers() {
 
   const load = async () => setUsers(await api('/api/admin/users') || [])
   useEffect(() => { load() }, [])
+
+  const saveQuota = async () => {
+    if (!quotaEditing) return
+    try {
+      await api(`/api/admin/users/${quotaEditing.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          max_watches: quotaEditing.max_watches === '' ? null : Number(quotaEditing.max_watches),
+          max_daily_runs: quotaEditing.max_daily_runs === '' ? null : Number(quotaEditing.max_daily_runs),
+        }),
+      })
+      showToast('Quota updated.')
+      setQuotaEditing(null)
+      load()
+    } catch (err) {
+      showToast(err?.message || 'Error updating quota', 'error')
+    }
+  }
 
   const create = async (e) => {
     e.preventDefault()
@@ -1044,6 +1163,27 @@ function AdminUsers() {
                 </Badge>
               </div>
             </div>
+            <div className="user-quota">
+              <span title="Max watchlists">👁 {u.max_watches ?? '∞'}</span>
+              <span title="Max runs/day">▶ {u.max_daily_runs ?? '∞'}/day</span>
+            </div>
+            {quotaEditing?.id === u.id ? (
+              <div className="quota-edit-form">
+                <input type="number" min="1" placeholder="∞ watches"
+                  value={quotaEditing.max_watches}
+                  onChange={e => setQuotaEditing({ ...quotaEditing, max_watches: e.target.value })} />
+                <input type="number" min="1" placeholder="∞ runs/day"
+                  value={quotaEditing.max_daily_runs}
+                  onChange={e => setQuotaEditing({ ...quotaEditing, max_daily_runs: e.target.value })} />
+                <button className="btn btn-primary btn-sm" onClick={saveQuota}>Save</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setQuotaEditing(null)}>✕</button>
+              </div>
+            ) : (
+              <button className="btn btn-secondary btn-sm"
+                onClick={() => setQuotaEditing({ id: u.id, max_watches: u.max_watches ?? '', max_daily_runs: u.max_daily_runs ?? '' })}>
+                Set quota
+              </button>
+            )}
             {u.id !== currentUserId && (
               <>
                 <button className={`btn btn-sm ${u.is_active ? 'btn-secondary' : 'btn-primary'}`}

@@ -11,6 +11,7 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    max_daily_runs: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Watchlist(Base):
