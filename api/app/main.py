@@ -1,9 +1,10 @@
 import io
 import os
+import secrets
 import time
 import uuid
 import zipfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -36,8 +37,8 @@ limiter = InMemoryRateLimiter(settings.rate_limit_rpm)
 app = FastAPI(title="Sentinella API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=settings.cors_origins,
+    allow_credentials="*" not in settings.cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -85,9 +86,25 @@ def startup():
     with Session(engine) as db:
         first_user = db.scalar(select(User).limit(1))
         if not first_user:
-            db.add(User(username="admin", password_hash=hash_password("admin123"), role="admin", is_active=True))
+            if settings.admin_password:
+                admin_password = settings.admin_password
+                logger.warning("Bootstrap admin created from ADMIN_PASSWORD env var", extra={"endpoint": "startup"})
+            else:
+                admin_password = secrets.token_urlsafe(16)
+                try:
+                    with open("/tmp/admin_initial_password.txt", "w", encoding="utf-8") as f:
+                        f.write(admin_password)
+                except OSError as exc:
+                    raise RuntimeError(
+                        "Cannot write /tmp/admin_initial_password.txt and ADMIN_PASSWORD is not set. "
+                        "Set ADMIN_PASSWORD in .env and restart."
+                    ) from exc
+                logger.warning(
+                    "Bootstrap admin created. Initial password written to /tmp/admin_initial_password.txt — delete after first login",
+                    extra={"endpoint": "startup"},
+                )
+            db.add(User(username="admin", password_hash=hash_password(admin_password), role="admin", is_active=True))
             db.commit()
-            logger.warning("Bootstrap admin created: change password", extra={"endpoint": "startup"})
 
 
 @app.get("/health")
@@ -196,7 +213,7 @@ def get_stats(_: User = Depends(require_admin), db: Session = Depends(get_db)):
     total_watches = db.scalar(select(func.count()).select_from(Watchlist)) or 0
     total_runs = db.scalar(select(func.count()).select_from(Run)) or 0
 
-    since = datetime.utcnow() - timedelta(days=14)
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=14)
     rows = db.execute(
         select(func.date(Run.created_at).label("day"), func.count().label("count"))
         .where(Run.created_at >= since)
@@ -256,6 +273,7 @@ def run_query(
             fetched = fetch_extract(item["url"])
             item["content"] = fetched or item.pop("snippet", "")
         except Exception:
+            logger.warning(f"fetch failed url={item.get('url')}", exc_info=True)
             item["content"] = item.pop("snippet", "")
     digest = digest_markdown(query, items, language=output_language, custom_prompt=custom_prompt)
     run = Run(watch_id=watch_id, user_id=user_id, query=query, items=items, digest_md=digest)

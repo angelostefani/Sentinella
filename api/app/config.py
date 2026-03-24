@@ -6,6 +6,8 @@ class Settings(BaseModel):
     tz: str = os.getenv("TZ", "Europe/Rome")
     database_url: str = os.getenv("DATABASE_URL", "postgresql+psycopg://assistant:assistant@postgres:5432/assistant")
     jwt_secret: str = os.getenv("JWT_SECRET", "")
+    admin_password: str = os.getenv("ADMIN_PASSWORD", "")
+    cors_origins: list = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",")]
     jwt_expire_hours: int = int(os.getenv("JWT_EXPIRE_HOURS", "12"))
     ollama_url: str = os.getenv("OLLAMA_URL", "http://ollama:11434")
     ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.2")

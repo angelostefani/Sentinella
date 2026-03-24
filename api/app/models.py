@@ -1,5 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,7 +19,7 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     max_watches: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     max_daily_runs: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 
 class Watchlist(Base):
@@ -34,7 +38,7 @@ class Watchlist(Base):
     tags: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     output_language: Mapped[str] = mapped_column(String(50), nullable=False, default="italiano")
     custom_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 
 class Run(Base):
@@ -45,7 +49,7 @@ class Run(Base):
     query: Mapped[str] = mapped_column(Text, nullable=False)
     items: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     digest_md: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 
 class SeenItem(Base):
@@ -55,4 +59,4 @@ class SeenItem(Base):
     watch_id: Mapped[int] = mapped_column(ForeignKey("watchlist.id"), nullable=False)
     url_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     url: Mapped[str] = mapped_column(Text, nullable=False)
-    first_seen: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    first_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)

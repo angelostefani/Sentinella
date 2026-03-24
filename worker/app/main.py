@@ -53,6 +53,7 @@ def run_watch(watch_id: int):
                     fetched = fetch_extract(item["url"])
                     item["content"] = fetched or item.pop("snippet", "")
                 except Exception:
+                    logger.warning(f"fetch failed url={item.get('url')}", exc_info=True)
                     item["content"] = item.pop("snippet", "")
             prev_run = db.scalar(
                 select(Run).where(Run.watch_id == watch.id)
@@ -123,6 +124,13 @@ def sync_jobs(scheduler: BackgroundScheduler):
 
 def main():
     os.environ["TZ"] = settings.tz
+    # Ensure tags column exists independently of API startup order
+    with Session(engine) as db:
+        try:
+            db.execute(text("ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'"))
+            db.commit()
+        except ProgrammingError:
+            pass  # Table not yet created; sync_jobs will retry when ready
     scheduler = BackgroundScheduler(
         timezone=ZoneInfo(settings.tz),
         executors={"default": ThreadPoolExecutor(max_workers=settings.worker_max_workers)},

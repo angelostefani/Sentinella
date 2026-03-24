@@ -1,5 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -27,6 +31,7 @@ class Watchlist(Base):
     max_results: Mapped[int] = mapped_column(Integer, nullable=False)
     domains_allow: Mapped[list] = mapped_column(JSONB, nullable=False)
     domains_block: Mapped[list] = mapped_column(JSONB, nullable=False)
+    tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     output_language: Mapped[str] = mapped_column(String(50), nullable=False, default="italiano")
     custom_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -39,7 +44,7 @@ class Run(Base):
     query: Mapped[str] = mapped_column(Text, nullable=False)
     items: Mapped[list] = mapped_column(JSONB, nullable=False)
     digest_md: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 
 class SeenItem(Base):
@@ -48,4 +53,4 @@ class SeenItem(Base):
     watch_id: Mapped[int] = mapped_column(ForeignKey("watchlist.id"), nullable=False)
     url_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     url: Mapped[str] = mapped_column(Text, nullable=False)
-    first_seen: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    first_seen: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)

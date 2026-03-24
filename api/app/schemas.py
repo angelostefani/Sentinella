@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Annotated
-from pydantic import BaseModel, Field
+from apscheduler.triggers.cron import CronTrigger
+from pydantic import BaseModel, Field, field_validator
 
 
 class LoginIn(BaseModel):
@@ -66,6 +67,15 @@ class WatchIn(BaseModel):
     query: str
     cron: str = "0 8 * * *"
     enabled: bool = True
+
+    @field_validator("cron")
+    @classmethod
+    def validate_cron(cls, v: str) -> str:
+        try:
+            CronTrigger.from_crontab(v)
+        except Exception as e:
+            raise ValueError(f"invalid cron expression: {e}") from e
+        return v
     recency_days: int = 7
     max_results: int = 5
     domains_allow: list[str] = []
